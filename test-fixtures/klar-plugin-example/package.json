@@ -1,0 +1,7 @@
+{
+  "name": "klar-plugin-example",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Minimal reference ContrastPlugin used as a test fixture for klar's plugin-discovery convention.",
+  "main": "index.js"
+}

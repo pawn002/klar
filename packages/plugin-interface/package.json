@@ -1,0 +1,21 @@
+{
+  "name": "@pawn002/klar-plugin-interface",
+  "version": "1.0.0",
+  "description": "Shared ContrastPlugin interface for klar plugins",
+  "author": "John Z. Rioflorido",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pawn002/klar.git",
+    "directory": "packages/plugin-interface"
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

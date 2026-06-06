@@ -1,0 +1,24 @@
+{
+  "name": "@pawn002/klar-plugin-registry",
+  "version": "1.0.0",
+  "description": "Plugin registry for klar contrast algorithm plugins",
+  "author": "John Z. Rioflorido",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pawn002/klar.git",
+    "directory": "packages/plugin-registry"
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@pawn002/klar-plugin-interface": "file:../plugin-interface"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
