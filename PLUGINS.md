@@ -10,11 +10,18 @@ A plugin is an npm package named `klar-plugin-<id>` that exports an object
 implementing the `ContrastPlugin` interface from
 [`@pawn002/klar-plugin-interface`](https://www.npmjs.com/package/@pawn002/klar-plugin-interface).
 
-At startup, `klar` scans `node_modules` for packages matching the
-`klar-plugin-*` convention and registers whatever it finds. The core CLI does
-not bundle or depend on any algorithm plugin — each is installed explicitly by
-the user. If no plugins are installed, `klar` runs on its built-in algorithms
-alone.
+At startup, `klar` registers `klar-plugin-*` packages it finds, scoped to what
+you explicitly installed: packages declared in your project's `package.json`
+dependencies, plus packages installed alongside klar itself (e.g. a global
+install). It does **not** walk arbitrarily up the directory tree or auto-load
+transitive dependencies. The core CLI does not bundle or depend on any algorithm
+plugin — each is installed explicitly by the user. If no plugins are installed,
+`klar` runs on its built-in algorithms alone.
+
+Because loading a plugin runs its code, discovery can be inspected and locked
+down — `klar plugins list` shows where each plugin was loaded from, and
+`--no-plugins`, `KLAR_PLUGINS`, and `package.json` `"klar": { "plugins": [...] }`
+control what loads. See [SECURITY.md](./SECURITY.md) for the full trust model.
 
 ## Licensing — read before installing
 

@@ -1,6 +1,11 @@
+import { join } from 'path';
 import { PluginRegistry } from '@pawn002/klar-plugin-registry';
 import type { ContrastPlugin } from '@pawn002/klar-plugin-interface';
-import { getServices } from '../services';
+import { getServices, discoverPlugins } from '../services';
+
+// Repo root — the nearest package.json (which declares the klar-plugin-example
+// fixture as a devDependency) so discovery's Source 1 (declared deps) finds it.
+const KLAR_ROOT = join(__dirname, '..', '..');
 
 // ---- helpers ---------------------------------------------------------------
 
@@ -80,6 +85,44 @@ describe('getServices() plugin discovery', () => {
     const plugin = pluginRegistry.get('example');
     expect(plugin).toBeDefined();
     expect(plugin!.id).toBe('example');
+  });
+});
+
+// ---- discoverPlugins(): scoping + hardening --------------------------------
+// selfDir points at the test dir; klar lives at a repo root (not under a
+// node_modules), so the "global sibling" source is inactive and discovery runs
+// purely from the host project's declared deps (Source 1).
+
+describe('discoverPlugins() scoping and hardening', () => {
+  const baseCtx = { cwd: KLAR_ROOT, selfDir: __dirname };
+
+  it('loads a declared klar-plugin-* package and records its provenance', () => {
+    const registry = new PluginRegistry();
+    const records = discoverPlugins(registry, { ...baseCtx, env: {} });
+    expect(registry.has('example')).toBe(true);
+    const rec = records.find((r) => r.ids.includes('example'));
+    expect(rec).toBeDefined();
+    expect(rec!.packageName).toBe('klar-plugin-example');
+    expect(rec!.source).toBe('project');
+  });
+
+  it('KLAR_NO_PLUGINS disables discovery entirely', () => {
+    const registry = new PluginRegistry();
+    const records = discoverPlugins(registry, { ...baseCtx, env: { KLAR_NO_PLUGINS: '1' } });
+    expect(records).toEqual([]);
+    expect(registry.list()).toHaveLength(0);
+  });
+
+  it('KLAR_PLUGINS allowlist excludes packages not named', () => {
+    const registry = new PluginRegistry();
+    discoverPlugins(registry, { ...baseCtx, env: { KLAR_PLUGINS: 'klar-plugin-something-else' } });
+    expect(registry.has('example')).toBe(false);
+  });
+
+  it('KLAR_PLUGINS allowlist includes a named package', () => {
+    const registry = new PluginRegistry();
+    discoverPlugins(registry, { ...baseCtx, env: { KLAR_PLUGINS: 'klar-plugin-example' } });
+    expect(registry.has('example')).toBe(true);
   });
 });
 
