@@ -17,6 +17,13 @@ export function run(): void {
     .name('klar')
     .description('klar — color accessibility tools (OKCA contrast algorithm) for AI coding agents and the terminal')
     .version(pkg.version, '-v, --version')
+    .option('--no-plugins', 'Disable discovery of contrast-algorithm plugins (security: run core only)');
+
+  // Honor --no-plugins before any command builds its services (and discovers
+  // plugins). commander sets opts.plugins === false when the flag is present.
+  program.hook('preAction', (thisCommand) => {
+    if (thisCommand.opts().plugins === false) process.env.KLAR_NO_PLUGINS = '1';
+  });
 
   program.addCommand(contrastCommand());
   program.addCommand(pairCommand());

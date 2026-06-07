@@ -9,7 +9,9 @@
   },
   "main": "./dist/index.js",
   "files": [
-    "dist"
+    "dist",
+    "PLUGINS.md",
+    "SECURITY.md"
   ],
   "keywords": [
     "accessibility",
