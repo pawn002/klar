@@ -10,6 +10,7 @@
   "main": "./dist/index.js",
   "files": [
     "dist",
+    "AGENT_PLAYBOOK.md",
     "PLUGINS.md",
     "SECURITY.md"
   ],

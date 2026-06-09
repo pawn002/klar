@@ -55,6 +55,11 @@ maintained and licensed independently — see [PLUGINS.md](PLUGINS.md).
 |------|-------------|
 | `-v, --version` | Print version |
 | `-h, --help` | Print help |
+| `--no-plugins` | Disable discovery of contrast-algorithm plugins for this run; use built-in algorithms only |
+
+Plugin loading can also be restricted via the `KLAR_PLUGINS` allowlist,
+`KLAR_NO_PLUGINS`, or a `package.json` `"klar": { "plugins": [...] }` entry — see
+[SECURITY.md](SECURITY.md).
 
 ## Output Modes
 
@@ -95,7 +100,7 @@ klar contrast <color1> <color2> [options]
 
 | Type | Range | Meaning |
 |------|-------|---------|
-| `okca` | 1 to 21 | OKCA: OKLCH-native, WCAG-compatible ratio. 0 false passes. |
+| `okca` | 1 to 21 | OKCA: OKLCH-native, WCAG-compatible ratio. 0 false passes vs WCAG (1,249-pair audit). |
 | `wcag2` | 1 to 21 | Traditional WCAG 2.x luminance ratio |
 | `deltaE` | 0 to 100 | Delta E 2000 perceptual color difference |
 
@@ -429,6 +434,51 @@ klar find "#000000" "#cccccc" --target 4.5 --type wcag2
 klar find "#ffffff" "#3b82f6" --target 4.5 --json
 klar find "#ffffff" "#3b82f6" --target 4.5 -q
 klar find "#ffffff" "#3b82f6" --target 7 --type okca --tolerance 0.1
+```
+
+---
+
+### `plugins` — List registered contrast algorithm plugins
+
+```
+klar plugins list [options]
+```
+
+Lists every contrast-algorithm plugin klar discovered, with its source, package
+name, version, and resolved path — so you can see exactly what third-party code
+klar will run. Built-in algorithms (`okca`, `wcag2`, `deltaE`) are always
+available and are not plugins. See [PLUGINS.md](PLUGINS.md) and [SECURITY.md](SECURITY.md).
+
+**Options:**
+| Flag | Description |
+|------|-------------|
+| `--json` | JSON output |
+| `-q, --quiet` | Print only plugin ids, one per line |
+
+**JSON schema:** array of objects, one per registered plugin:
+
+```jsonc
+[
+  {
+    "id": "cvd-brettel",                       // string — the --type value
+    "displayName": "CVD (Brettel)",            // string — human-readable name
+    "description": "…",                        // string — one-line summary
+    "source": "global",                        // "project" | "global" | null
+    "packageName": "klar-plugin-cvd-brettel",  // string | null
+    "version": "1.0.0",                        // string | null
+    "resolvedPath": "/abs/path/to/plugin"      // string | null
+  }
+]
+```
+
+**Quiet output:** plugin ids, one per line.
+
+**Examples:**
+
+```bash
+klar plugins list
+klar plugins list --json
+klar plugins list -q
 ```
 
 ---
