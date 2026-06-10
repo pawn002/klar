@@ -1,0 +1,45 @@
+name: Publish
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write          # required for npm OIDC trusted publishing
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      # flip internal file: deps -> ^<version> so the published tarballs resolve
+      # from the registry (committed tree stays on file: for local dev)
+      - run: node scripts/prepare-publish.mjs
+      # publish in dependency order: interface -> registry -> klar-cli.
+      # each step skips if that exact version is already on npm (idempotent re-runs).
+      # --provenance is explicit to match okca and to fail LOUD if the repo is
+      # somehow private (rather than silently shipping an un-attested tarball).
+      - name: Publish interface
+        working-directory: packages/plugin-interface
+        run: |
+          v=$(node -p "require('./package.json').version")
+          npm view @pawn002/klar-plugin-interface@$v version >/dev/null 2>&1 \
+            || npx --yes npm@11 publish --access public --provenance
+      - name: Publish registry
+        working-directory: packages/plugin-registry
+        run: |
+          v=$(node -p "require('./package.json').version")
+          npm view @pawn002/klar-plugin-registry@$v version >/dev/null 2>&1 \
+            || npx --yes npm@11 publish --access public --provenance
+      - name: Publish klar-cli
+        run: |
+          v=$(node -p "require('./package.json').version")
+          npm view klar-cli@$v version >/dev/null 2>&1 \
+            || npx --yes npm@11 publish --access public --provenance
