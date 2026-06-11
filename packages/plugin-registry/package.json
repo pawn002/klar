@@ -1,6 +1,6 @@
 {
   "name": "@pawn002/klar-plugin-registry",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Plugin registry for klar contrast algorithm plugins",
   "author": "John Z. Rioflorido",
   "license": "MIT",
