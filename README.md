@@ -627,9 +627,12 @@ klar follows a grep-style convention so scripts can branch on the outcome:
 
 `2` covers both an unusable *value* (`klar contrast notacolor "#000"`) and an
 unusable *invocation* (`klar find "#fff" "#000"` with no `--target`, a
-misspelled flag, an unknown command, or no command at all). Every usage error
-is written to stderr with an `Error:` prefix and prints nothing to stdout, so
-`1` always means "klar understood you, and the answer is no."
+misspelled flag, an unknown command, or no command at all).
+
+Every usage error writes to **stderr** and leaves **stdout empty**, so `1`
+always means "klar understood you, and the answer is no." Most carry an
+`Error:` prefix; the exception is `klar` with no command, which prints the
+help text to stderr instead. Match on the exit code, not the message.
 
 On a soft failure (`1`) the result payload is still written to **stdout** —
 `find` prints the closest reachable color, `--json` reports `"success": false`

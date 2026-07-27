@@ -129,6 +129,21 @@ d('CLI exit-code contract', () => {
       expect(fromCommander).toMatch(/^Error: /);
       expect(fromKlar).toMatch(/^Error: /);
     });
+
+    // The property a pipeline actually depends on: a usage error never puts
+    // anything on the data channel, so `1` is the only code that can carry a
+    // payload. `klar` with no command prints help to stderr, not stdout.
+    it.each([
+      ['unknown option',   ['pair', '--min-lightness', '40']],
+      ['unknown command',  ['bogus']],
+      ['missing argument', ['contrast', '#fff']],
+      ['bad color value',  ['contrast', 'notacolor', '#000']],
+      ['no command at all', []],
+    ])('%s writes nothing to stdout', (_label, args) => {
+      const { code, stdout } = run(args as string[]);
+      expect(code).toBe(2);
+      expect(stdout).toBe('');
+    });
   });
 
   describe('0 = help and version are not errors', () => {
