@@ -100,7 +100,7 @@ klar contrast <color1> <color2> [options]
 
 | Type | Range | Meaning |
 |------|-------|---------|
-| `okca` | 1 to 21 | OKCA: OKLCH-native, WCAG-compatible ratio. 0 false passes vs WCAG (1,249-pair audit). |
+| `okca` | 1 to 20.9 | OKCA: OKLCH-native, WCAG-compatible ratio. 0 false passes vs WCAG (1,249-pair audit). Polarity-aware — light-on-dark caps at 20.9, dark-on-light at 20. |
 | `wcag2` | 1 to 21 | Traditional WCAG 2.x luminance ratio |
 | `deltaE` | 0 to 100 | Delta E 2000 perceptual color difference |
 
@@ -110,14 +110,14 @@ Additional algorithms are available as optional plugins — see [PLUGINS.md](PLU
 
 ```jsonc
 {
-  "contrast": 21,           // number — the calculated value
+  "contrast": 20.9,         // number — the calculated value
   "type": "okca",           // string — algorithm used
   "colorOne": "#ffffff",   // string — first color as provided
   "colorTwo": "#000000"    // string — second color as provided
 }
 ```
 
-**Quiet output:** single number, e.g. `21`
+**Quiet output:** single number, e.g. `20.9`
 
 **Examples:**
 
@@ -151,7 +151,7 @@ klar pair [options]
 {
   "colorOne": "#1c2333",   // string — foreground hex
   "colorTwo": "#ffe3e8",   // string — background hex
-  "contrast": 13           // number — OKCA score between the pair
+  "contrast": 11.9         // number — OKCA score between the pair
 }
 ```
 

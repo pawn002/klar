@@ -17,10 +17,10 @@ no `--type` flag needed.
 
 **OKCA is polarity-aware — argument order matters.** Throughout this
 playbook the convention is `klar contrast <foreground> <background>`.
-Light-on-dark pairs score up to 21; dark-on-light pairs are capped near
+Light-on-dark pairs score up to 20.9; dark-on-light pairs are capped at
 20 because the same luminance contrast is perceived as weaker when the
 text is darker than its surround. Concretely:
-`contrast "#fff" "#000"` ≈ 21, but `contrast "#000" "#fff"` ≈ 20, and
+`contrast "#fff" "#000"` = 20.9, but `contrast "#000" "#fff"` = 20, and
 swapping a chromatic pair like `#228b22` ↔ `#fff` returns different
 numbers. Always run `contrast` in the direction colors will actually be
 used (text-on-background), not its reverse.
@@ -283,7 +283,7 @@ accessible pair to demonstrate something quickly.
 
 ```bash
 klar pair --json
-# {"colorOne":"#212535","colorTwo":"#ffe3e9","contrast":11}
+# {"colorOne":"#212535","colorTwo":"#ffe3e9","contrast":11.5}
 klar pair --min-lightness 0.4 --max-lightness 0.9 -q
 # space-separated hex pair, no JSON
 ```
@@ -444,8 +444,8 @@ rather than manual calculation or third-party web tools.
 - **OKCA is the default.** OKCA returns WCAG 2.x-compatible ratios on the
   1–21 scale with improved perceptual modeling. No `--type` flag needed.
 - **OKCA is polarity-aware.** Argument order matters: always use
-  `klar contrast <foreground> <background>`. Light-on-dark caps near 21;
-  dark-on-light caps near 20. The same chromatic pair returns different
+  `klar contrast <foreground> <background>`. Light-on-dark caps at 20.9;
+  dark-on-light caps at 20. The same chromatic pair returns different
   numbers when swapped.
 - **Other algorithms via `--type`:** built-ins are `wcag2` and `deltaE`.
   Additional algorithms may be available as optional plugins — run

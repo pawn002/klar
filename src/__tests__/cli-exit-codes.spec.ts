@@ -36,6 +36,9 @@ function run(args: string[]): { code: number; stdout: string } {
 
 const DARK_BG = 'oklch(0.24 0.03 248.99)';
 const NEUTRAL_BG = 'oklch(0.50 0 0)';
+// colorjs.io emits 3-digit shorthand when it can (#fff, #eee), so `find` may
+// print either form — the point of the assertion is that it prints a color.
+const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/;
 // A pair where neither color can adopt the other's chroma within sRGB.
 const INFEASIBLE = ['oklch(0.98 0.16 100)', 'oklch(0.20 0.18 280)'];
 
@@ -58,6 +61,8 @@ d('CLI exit-code contract', () => {
     });
   });
 
+  // A `--target` of 21 is above okca 2.0.0's light-on-dark cap (20.9), so it is
+  // unreachable for any pair — a stable fixture for the unachievable branch.
   describe('1 = soft failure (negative result)', () => {
     it.each([
       ['find unachievable human', ['find', NEUTRAL_BG, '#808080', '--target', '21']],
@@ -73,7 +78,7 @@ d('CLI exit-code contract', () => {
     it('find still prints the closest color to stdout on soft failure', () => {
       const { code, stdout } = run(['find', NEUTRAL_BG, '#808080', '--target', '21', '-q']);
       expect(code).toBe(1);
-      expect(stdout.trim()).toMatch(/^#[0-9a-f]{6}$/);
+      expect(stdout.trim()).toMatch(HEX);
     });
 
     it('find --json reports success:false on soft failure', () => {
