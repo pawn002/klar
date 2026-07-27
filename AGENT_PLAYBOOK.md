@@ -338,14 +338,15 @@ and hue were preserved.
 
 **`pair`** generates a random color pair that meets a target OKCA
 contrast. Useful as a seed for accent exploration or when you need an
-accessible pair to demonstrate something quickly. Note that its
-lightness bounds are on a **0–100** scale, unlike the 0–1 OKLCH `L`
-that `meta` and `lightness` report.
+accessible pair to demonstrate something quickly. It takes no tuning
+options — the dark/light split is fixed. Note that `pair` rounds its
+`contrast` to a whole number, unlike `contrast`, which reports one
+decimal; re-measure with `klar contrast` if you need the precise ratio.
 
 ```bash
 klar pair --json
-# {"colorOne":"#212535","colorTwo":"#ffe3e9","contrast":11.5}
-klar pair --min-lightness 40 --max-lightness 90 -q
+# {"colorOne":"#212535","colorTwo":"#ffe3e9","contrast":12}
+klar pair -q
 # space-separated hex pair, no JSON
 ```
 

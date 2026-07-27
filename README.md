@@ -140,10 +140,11 @@ klar pair [options]
 **Options:**
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--min-lightness <n>` | | Minimum OKLCH lightness 0–100 |
-| `--max-lightness <n>` | | Maximum OKLCH lightness 0–100 |
 | `--json` | | JSON output |
 | `-q, --quiet` | | Print only two hex values space-separated |
+
+The generated pair is always a dark/light combination chosen for high
+contrast; its lightness range is not configurable.
 
 **JSON schema:**
 
@@ -151,7 +152,8 @@ klar pair [options]
 {
   "colorOne": "#1c2333",   // string — foreground hex
   "colorTwo": "#ffe3e8",   // string — background hex
-  "contrast": 11.9         // number — OKCA score between the pair
+  "contrast": 12           // integer — OKCA score, rounded to a whole number
+                           //   (unlike `contrast`, which reports one decimal)
 }
 ```
 
@@ -161,7 +163,6 @@ klar pair [options]
 
 ```bash
 klar pair
-klar pair --min-lightness 20 --max-lightness 80
 klar pair --json
 klar pair -q
 ```
