@@ -1,6 +1,6 @@
 {
   "name": "klar-cli",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "description": "klar — color accessibility tools (OKCA contrast algorithm) for AI coding agents and the terminal",
   "author": "John Z. Rioflorido",
   "license": "MIT",
@@ -34,8 +34,7 @@
     "build": "tsc -p packages/plugin-interface && tsc -p packages/plugin-registry && tsc",
     "dev": "tsc --watch",
     "test": "jest",
-    "test:watch": "jest --watch",
-    "lint": "eslint \"src/**/*.ts\""
+    "test:watch": "jest --watch"
   },
   "dependencies": {
     "@pawn002/klar-plugin-interface": "file:packages/plugin-interface",
