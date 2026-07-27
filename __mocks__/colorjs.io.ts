@@ -47,9 +47,27 @@ class Color {
   }
 
   private parseColorString(color: string): [number, number, number] | null {
+    // A few CSS named colors. Real colorjs.io knows the full set; these cover
+    // what the specs use. Named colors are valid input to every klar command.
+    const named: Record<string, string> = {
+      white: '#ffffff',
+      black: '#000000',
+      red: '#ff0000',
+      rebeccapurple: '#663399',
+    };
+    const lower = color.trim().toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(named, lower)) {
+      color = named[lower];
+    }
+
     // Parse hex colors
     if (color.startsWith('#')) {
-      const hex = color.slice(1);
+      let hex = color.slice(1);
+      // Real colorjs.io accepts 3-digit shorthand; expand it by doubling each
+      // nibble so the mock does not under-report what klar actually accepts.
+      if (/^[0-9A-Fa-f]{3}$/.test(hex)) {
+        hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+      }
       if (!/^[0-9A-Fa-f]{6}$/.test(hex)) {
         return null; // Invalid hex
       }

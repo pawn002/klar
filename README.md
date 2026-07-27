@@ -239,7 +239,15 @@ is a meaningfully different color that an agent can act on.
 #### Fixed-step mode
 
 Activated by passing `--light-steps` and/or `--chroma-steps`, or by using `--color-space hsl`.
-Divides the space into uniform intervals. May produce out-of-gamut cells (`"color": ""`).
+Divides the space into uniform intervals and is **not gamut-aware**: cells outside
+sRGB are emitted as `"color": ""`, and they are frequently the majority —
+`--light-steps 10 --chroma-steps 5` on `#3b82f6` returns 50 cells, 36 of them empty.
+Filter before use, since passing `""` to another klar command is a usage error:
+
+```bash
+klar variants "#3b82f6" --light-steps 4 --chroma-steps 3 --json \
+  | jq -r '.[][] | select(.color != "") | .color'
+```
 
 ```
 klar variants <color> --light-steps <n> --chroma-steps <n> [--color-space <space>] [--json]
@@ -253,7 +261,7 @@ klar variants <color> --light-steps <n> --chroma-steps <n> [--color-space <space
 **Options:**
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--min-delta <n>` | `11` | Minimum Delta E 2000 between adjacent cells (adaptive mode) |
+| `--min-delta <n>` | `11` | Minimum Delta E 2000 between vertically adjacent cells in a column (adaptive mode) |
 | `--light-steps <n>` | | Fixed lightness steps — activates fixed-step mode |
 | `--chroma-steps <n>` | | Fixed chroma steps — activates fixed-step mode |
 | `--color-space <space>` | `oklch` | `oklch` or `hsl` (hsl forces fixed-step mode) |
@@ -441,7 +449,10 @@ klar find "#ffffff" "#3b82f6" --target 4.5
 klar find "#000000" "#cccccc" --target 4.5 --type wcag2
 klar find "#ffffff" "#3b82f6" --target 4.5 --json
 klar find "#ffffff" "#3b82f6" --target 4.5 -q
-klar find "#ffffff" "#3b82f6" --target 7 --type okca --tolerance 0.1
+klar find "#ffffff" "#3b82f6" --target 5.5 --type okca --tolerance 0.1
+
+# This blue tops out at 5.9 on white, so a target of 7 exits 1
+klar find "#ffffff" "#3b82f6" --target 7
 ```
 
 ---

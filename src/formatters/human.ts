@@ -5,23 +5,38 @@
  * issues in a CommonJS build. chalk v5+ is ESM-only and cannot be required
  * from CommonJS without dynamic import gymnastics.
  */
+import Color from 'colorjs.io';
 
-/** Render an ANSI true-color background block: ██ */
-export function colorSwatch(hex: string): string {
-  const rgb = hexToRgb(hex);
+/** Render an ANSI true-color block: ██ */
+export function colorSwatch(color: string): string {
+  const rgb = toRgb255(color);
   if (!rgb) return '██';
   // \x1b[48;2;R;G;Bm sets background, \x1b[38;2;R;G;Bm sets foreground
   return `\x1b[38;2;${rgb[0]};${rgb[1]};${rgb[2]}m██\x1b[0m`;
 }
 
-function hexToRgb(hex: string): [number, number, number] | null {
-  const clean = hex.replace('#', '');
-  if (clean.length !== 6) return null;
-  return [
-    parseInt(clean.slice(0, 2), 16),
-    parseInt(clean.slice(2, 4), 16),
-    parseInt(clean.slice(4, 6), 16),
-  ];
+/**
+ * Resolve a color to 8-bit RGB for the swatch.
+ *
+ * Delegates to colorjs.io — the same parser the rest of klar validates with —
+ * so the swatch colors exactly the inputs klar accepts, and nothing else.
+ * The previous implementation matched 6 hex digits by hand, which silently
+ * emitted an uncolored block for `#fff`, `rgb(...)`, `oklch(...)` and named
+ * colors (most of the documented examples), while accepting bare `ff0000`
+ * that klar itself rejects.
+ */
+function toRgb255(color: string): [number, number, number] | null {
+  try {
+    const coords = new Color(color).to('srgb').coords;
+    // Out-of-gamut coordinates fall outside 0-1; clamp so the escape stays valid.
+    return coords.map((c) => Math.max(0, Math.min(255, Math.round(c * 255)))) as [
+      number,
+      number,
+      number,
+    ];
+  } catch {
+    return null;
+  }
 }
 
 export function formatContrast(data: {

@@ -12,6 +12,34 @@ describe('human formatters', () => {
     it('should return plain blocks for invalid hex', () => {
       expect(colorSwatch('bad')).toBe('██');
     });
+
+    // The swatch used to accept only 6-digit hex and silently emit an
+    // uncolored block for everything else — including `#fff` and
+    // `rgb(...)`, which the README and the commands' own --help use.
+    it('renders 3-digit shorthand identically to its 6-digit form', () => {
+      expect(colorSwatch('#fff')).toBe(colorSwatch('#ffffff'));
+      expect(colorSwatch('#000')).toBe(colorSwatch('#000000'));
+      expect(colorSwatch('#abc')).toBe(colorSwatch('#aabbcc'));
+    });
+
+    it.each([
+      ['3-digit hex', '#f00'],
+      ['6-digit hex', '#ff0000'],
+      ['rgb()',       'rgb(59, 130, 246)'],
+      ['oklch()',     'oklch(50% 0.2 240)'],
+      ['named color', 'rebeccapurple'],
+    ])('colors the swatch for %s', (_label, input) => {
+      expect(colorSwatch(input)).toMatch(/^\x1b\[38;2;\d{1,3};\d{1,3};\d{1,3}m██\x1b\[0m$/);
+    });
+
+    // The swatch must color exactly what klar accepts. Bare hex without a `#`
+    // is rejected by `klar contrast` (exit 2), so it must not render either.
+    it.each([['bare 3-digit', 'bad'], ['bare 6-digit', 'ff0000'], ['nonsense', 'notacolor']])(
+      'returns a plain block for %s, which klar rejects as input',
+      (_label, input) => {
+        expect(colorSwatch(input)).toBe('██');
+      },
+    );
   });
 
   describe('formatContrast', () => {
