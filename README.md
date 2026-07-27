@@ -12,9 +12,9 @@ All commands run locally with zero network calls.
 ## What this is
 
 `klar` ships with **OKCA** (OK Contrast Algorithm) — a WCAG-compatible contrast
-algorithm on the familiar 1–21 scale, with **zero false passes** against the
-WCAG 2.x threshold across a 1,249-pair audit of Tailwind, the GOV.UK Design
-System, and USWDS v3.x.
+algorithm on the familiar WCAG scale (1 to 20.9), with **zero false passes**
+against the WCAG 2.x threshold across a 1,249-pair audit of Tailwind, the
+GOV.UK Design System, and USWDS v3.x.
 
 The problem OKCA solves:
 
@@ -536,7 +536,11 @@ klar contrast "$FG" "$BG" --type wcag2 --json
 klar find "#ffffff" "#3b82f6" --target 4.5 --type wcag2 -q
 
 # Find accessible text for dark background
-klar find "#1a1a2e" "#e94560" --target 4.5 --type okca --json
+klar find "#1a1a2e" "#22c55e" --target 4.5 --type okca --json
+
+# A saturated color may have no passing shade — find only moves lightness,
+# so check the exit code rather than applying the output blindly.
+klar find "#1a1a2e" "#e94560" --target 4.5 --type okca --json  # exits 1
 
 # Check if the result actually meets the target
 ADJUSTED=$(klar find "#ffffff" "#3b82f6" --target 4.5 --type wcag2 -q)

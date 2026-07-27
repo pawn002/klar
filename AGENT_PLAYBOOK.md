@@ -11,19 +11,25 @@ All commands assume `klar` is on PATH.
 ## Key concepts agents must understand
 
 **OKCA is the default contrast algorithm.** OKCA (OK Contrast
-Algorithm) returns WCAG 2.x-compatible contrast ratios on the same
-1–21 scale, with improved perceptual modeling. It is the CLI default —
-no `--type` flag needed.
+Algorithm) returns WCAG 2.x-compatible contrast ratios on the familiar
+WCAG scale, with improved perceptual modeling. It is the CLI default —
+no `--type` flag needed. Ratios run from 1 to 20.9; the top of the
+range is 20.9 rather than 21 because the caps are polarity-aware (see
+below), so do not treat 21 as a reachable value.
 
 **OKCA is polarity-aware — argument order matters.** Throughout this
 playbook the convention is `klar contrast <foreground> <background>`.
 Light-on-dark pairs score up to 20.9; dark-on-light pairs are capped at
 20 because the same luminance contrast is perceived as weaker when the
 text is darker than its surround. Concretely:
-`contrast "#fff" "#000"` = 20.9, but `contrast "#000" "#fff"` = 20, and
-swapping a chromatic pair like `#228b22` ↔ `#fff` returns different
-numbers. Always run `contrast` in the direction colors will actually be
-used (text-on-background), not its reverse.
+`contrast "#fff" "#000"` = 20.9, but `contrast "#000" "#fff"` = 20.
+
+Chromatic pairs are asymmetric too, and the gap is small enough that it
+can decide an AA verdict. `contrast "#fff" "#0055ff"` = 4.5 (passes AA
+body text), but `contrast "#0055ff" "#fff"` = 4.3 (fails). Always run
+`contrast` in the direction colors will actually be used
+(text-on-background), not its reverse — and never reuse a ratio you
+measured in the opposite order.
 
 **Built-in contrast algorithms (via `--type`):**
 - `okca` (default) — WCAG 2.x-compatible ratio, polarity-aware
@@ -148,18 +154,71 @@ Internally `find` evaluates OKCA as `(adjusted-foreground, background)`,
 so the `actualContrast` in the result corresponds to the polarity the
 adjusted color will be used in.
 
+**`find` moves lightness only — check `success` before using the
+result.** A saturated color has a narrow in-gamut lightness band, and
+`find` cannot leave it. The command above is one of those cases:
+
+```jsonc
+{
+  "adjustedColor": "#438aff",
+  "actualContrast": 2.2,
+  "success": false,          // 4.5 unreachable — exit code is 1
+  "message": "Target contrast 4.5 not achievable by adjusting lightness only (closest reached: 2.2). ..."
+}
+```
+
+`klar find` still prints its closest attempt on failure, so never apply
+the output without checking `success` (or the exit code).
+
+Diagnose it with `lightness`, which reports the sRGB-displayable L range
+at that color's chroma and hue:
+
+```bash
+klar lightness "$ORIGINAL" --json
+# { "lightMin": 0.466, "lightMax": 0.648, ... }
+```
+
+Blue at chroma 0.188 can only live between L 0.466 and L 0.648 — there
+is no lighter version of *that* blue to move to. When this happens, the
+chroma has to give. Pull candidates from `variants` (which walks chroma
+as well as lightness) and keep the ones that clear the target:
+
+```bash
+for V in $(klar variants "$ORIGINAL" --json | jq -r '.[][] | .color'); do
+  OKCA=$(klar contrast "$V" "$DARK_BG" -q)
+  awk -v c="$OKCA" -v v="$V" 'BEGIN { if (c >= 4.5) print v, c }'
+done
+# #cfd2d7 10.4
+# #bcd3f9 10
+# #a6a9ae 6.4
+# #94aace 5.9
+```
+
+`#bcd3f9` is the pick here — it keeps the most chroma of the four while
+clearing 4.5 comfortably.
+
+Report the trade to the art director explicitly: the color passes now,
+but it is less saturated than the brand blue.
+
 ### Step 3: Measure how much each color shifted
 
 The art director will ask "did it change much?" Compute deltaE between
-the original and the adjusted version:
+the original and whatever you settled on. Gate on `find`'s exit code so
+a failed search never silently becomes the answer:
 
 ```bash
-ADJUSTED=$(klar find "$DARK_BG" "$ORIGINAL" --target 4.5 -q)
-klar contrast "$ORIGINAL" "$ADJUSTED" --type deltaE -q
+if ADJUSTED=$(klar find "$DARK_BG" "$ORIGINAL" --target 4.5 -q); then
+  klar contrast "$ORIGINAL" "$ADJUSTED" --type deltaE -q
+else
+  echo "lightness alone was not enough — fall back to the variants sweep above"
+fi
 ```
 
 A deltaE under 10 means the color kept its character. Over 20 means it
-shifted substantially — flag this for the art director's review.
+shifted substantially — flag this for the art director's review. The
+`#bcd3f9` chosen above is a deltaE of 25 from the brand blue: it passes,
+but it is a visibly different color and the art director has to sign off
+on it. That is the honest report, not a silent substitution.
 
 ### Step 4: Align chromas across the palette
 
@@ -279,12 +338,14 @@ and hue were preserved.
 
 **`pair`** generates a random color pair that meets a target OKCA
 contrast. Useful as a seed for accent exploration or when you need an
-accessible pair to demonstrate something quickly.
+accessible pair to demonstrate something quickly. Note that its
+lightness bounds are on a **0–100** scale, unlike the 0–1 OKLCH `L`
+that `meta` and `lightness` report.
 
 ```bash
 klar pair --json
 # {"colorOne":"#212535","colorTwo":"#ffe3e9","contrast":11.5}
-klar pair --min-lightness 0.4 --max-lightness 0.9 -q
+klar pair --min-lightness 40 --max-lightness 90 -q
 # space-separated hex pair, no JSON
 ```
 
@@ -441,12 +502,14 @@ When asked to check, generate, or modify colors, always use `klar`
 rather than manual calculation or third-party web tools.
 
 ### Key rules
-- **OKCA is the default.** OKCA returns WCAG 2.x-compatible ratios on the
-  1–21 scale with improved perceptual modeling. No `--type` flag needed.
+- **OKCA is the default.** OKCA returns WCAG 2.x-compatible ratios from 1 to
+  20.9 with improved perceptual modeling. No `--type` flag needed. 21 is not
+  reachable — the caps are polarity-aware.
 - **OKCA is polarity-aware.** Argument order matters: always use
   `klar contrast <foreground> <background>`. Light-on-dark caps at 20.9;
   dark-on-light caps at 20. The same chromatic pair returns different
-  numbers when swapped.
+  numbers when swapped, and the gap can flip an AA verdict — never reuse a
+  ratio measured in the opposite order.
 - **Other algorithms via `--type`:** built-ins are `wcag2` and `deltaE`.
   Additional algorithms may be available as optional plugins — run
   `klar plugins list` to see what's registered in this environment.
