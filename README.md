@@ -304,8 +304,15 @@ klar match <color1> <color2> [options]
 **Arguments:**
 | Arg | Description |
 |-----|-------------|
-| `color1` | Color to adjust |
-| `color2` | Reference color (chroma source) |
+| `color1` | First color of the pair |
+| `color2` | Second color of the pair |
+
+Neither argument is fixed: klar rebuilds whichever color can adopt the other's
+chroma while staying inside the sRGB gamut, and returns the other untouched.
+When both directions are in gamut it converges on the **higher** of the two
+chromas. So `color1` may well be the one that comes back changed — read
+`colors` rather than assuming a direction. `chroma` is the resulting shared
+value.
 
 **Options:**
 | Flag | Description |

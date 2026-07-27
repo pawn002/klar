@@ -162,7 +162,11 @@ export class ColorUtilService {
           new Color('oklch', c1CandCoords).to('srgb').toString({ format: 'hex' }),
           colorpair[1],
         ];
-        pair.chroma = c2CandCoords[1];
+        // color1 was rebuilt at color2's chroma, and color2 is returned as-is,
+        // so color2's chroma is the shared value. Reporting c2CandCoords[1]
+        // here echoed color1's *original* chroma instead — 0 whenever color1
+        // was neutral — while both returned colors carried c1CandCoords[1].
+        pair.chroma = c1CandCoords[1];
       } else {
         pair.success = true;
         pair.colors = [
