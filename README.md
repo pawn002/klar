@@ -12,9 +12,15 @@ All commands run locally with zero network calls.
 ## What this is
 
 `klar` ships with **OKCA** (OK Contrast Algorithm) — a WCAG-compatible contrast
-algorithm on the familiar WCAG scale (1 to 20.9), with **zero false passes**
-against the WCAG 2.x threshold across a 1,249-pair audit of Tailwind, the
-GOV.UK Design System, and USWDS v3.x.
+algorithm on the familiar WCAG scale, with **zero false passes** against the
+WCAG 2.x threshold.
+
+Since okca 2.0.0 that guarantee holds *by construction*, not just by sampling:
+`OKCA ≤ WCAG` is proven across the sRGB gamut via an exact identity plus
+interval-verified lemmas ([`docs/FP0_PROOF.md`](https://github.com/pawn002/okca/blob/main/docs/FP0_PROOF.md)),
+with a gamut-wide invariant enforced in okca's CI. The empirical battery — 1,249
+pairs across Tailwind, the GOV.UK Design System, and USWDS v3.x — remains at zero
+false passes and is now a cross-check on the proof rather than the basis for it.
 
 The problem OKCA solves:
 
@@ -100,7 +106,7 @@ klar contrast <color1> <color2> [options]
 
 | Type | Range | Meaning |
 |------|-------|---------|
-| `okca` | 1 to 20.9 | OKCA: OKLCH-native, WCAG-compatible ratio. 0 false passes vs WCAG (1,249-pair audit). Polarity-aware — light-on-dark caps at 20.9, dark-on-light at 20. |
+| `okca` | 1 to 21 (20.9 reachable) | OKCA: OKLCH-native, WCAG-compatible ratio. 0 false passes vs WCAG, proven across the sRGB gamut. Polarity-aware — light-on-dark caps at 20.9, dark-on-light at 20. |
 | `wcag2` | 1 to 21 | Traditional WCAG 2.x luminance ratio |
 | `deltaE` | 0 to 100 | Delta E 2000 perceptual color difference |
 

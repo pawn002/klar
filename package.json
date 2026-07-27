@@ -40,7 +40,7 @@
   "dependencies": {
     "@pawn002/klar-plugin-interface": "file:packages/plugin-interface",
     "@pawn002/klar-plugin-registry": "file:packages/plugin-registry",
-    "@pawn002/okca": "^2.0.0",
+    "@pawn002/okca": "^2.0.1",
     "colorjs.io": "^0.5.2",
     "commander": "^13.1.0"
   },
