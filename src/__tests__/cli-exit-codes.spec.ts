@@ -23,6 +23,16 @@ function exitCode(args: string[]): number {
   }
 }
 
+/** Run the CLI and return its trimmed stderr. */
+function stderrOf(args: string[]): string {
+  try {
+    execFileSync(process.execPath, [CLI, ...args], { stdio: 'pipe' });
+    return '';
+  } catch (err) {
+    return ((err as { stderr: Buffer }).stderr?.toString() ?? '').trim();
+  }
+}
+
 /** Run the CLI and return { code, stdout }. */
 function run(args: string[]): { code: number; stdout: string } {
   try {
@@ -95,6 +105,41 @@ d('CLI exit-code contract', () => {
       ['match bad input', ['match', 'nope', '#000']],
     ])('%s exits 2', (_label, args) => {
       expect(exitCode(args as string[])).toBe(2);
+    });
+
+    // commander defaults its own parse errors to exit 1, which is klar's
+    // soft-failure code. They are routed to 2 so a script branching on `$?`
+    // can tell "you typed it wrong" from "no answer exists".
+    it.each([
+      ['unknown option',          ['pair', '--min-lightness', '40']],
+      ['unknown option on subcmd', ['contrast', '#fff', '#000', '--nope']],
+      ['unknown command',         ['bogus']],
+      ['unknown nested command',  ['plugins', 'bogus']],
+      ['missing required option', ['find', '#fff', '#000']],
+      ['option missing its value', ['find', '#fff', '#000', '--target']],
+      ['missing argument',        ['contrast', '#fff']],
+      ['no command at all',       []],
+    ])('%s exits 2', (_label, args) => {
+      expect(exitCode(args as string[])).toBe(2);
+    });
+
+    it('reports usage errors on stderr with the same Error: prefix as input errors', () => {
+      const fromCommander = stderrOf(['pair', '--min-lightness', '40']);
+      const fromKlar = stderrOf(['contrast', 'notacolor', '#000']);
+      expect(fromCommander).toMatch(/^Error: /);
+      expect(fromKlar).toMatch(/^Error: /);
+    });
+  });
+
+  describe('0 = help and version are not errors', () => {
+    it.each([
+      ['top-level help',   ['--help']],
+      ['version',          ['--version']],
+      ['subcommand help',  ['contrast', '--help']],
+      ['nested help',      ['plugins', 'list', '--help']],
+      ['help subcommand',  ['help', 'contrast']],
+    ])('%s exits 0', (_label, args) => {
+      expect(exitCode(args as string[])).toBe(0);
     });
   });
 });

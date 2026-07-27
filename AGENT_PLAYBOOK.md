@@ -519,9 +519,12 @@ rather than manual calculation or third-party web tools.
   to quantify how much a color changed. < 3 is imperceptible, 11+ is clearly different.
 - **Always verify after adjusting.** After `klar find` or `klar match`, re-check
   contrast and deltaE to confirm the result.
-- **Check the exit code.** `find`/`match` exit `1` when the target can't be met
-  (the closest result is still printed — don't apply it blindly), `2` on invalid
-  input, `0` on success. In scripts, gate on it:
+- **Check the exit code.** `0` on success. `1` is a soft failure — klar
+  understood the request and the answer is negative (`find` target
+  unreachable, `match` infeasible); the closest result is still printed, so
+  don't apply it blindly. `2` is a usage error — a bad color value, a
+  misspelled flag, an unknown command, or a missing argument — and prints
+  nothing to stdout. In scripts, gate on it:
   `c=$(klar find "<bg>" "<color>" --target 4.5 -q) && use "$c" || handle_failure`.
 
 ### WCAG thresholds

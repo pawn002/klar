@@ -621,14 +621,19 @@ klar follows a grep-style convention so scripts can branch on the outcome:
 
 | Code | Meaning |
 |------|---------|
-| `0` | Success — the operation produced a satisfying result |
+| `0` | Success — the operation produced a satisfying result (also `--help` and `--version`) |
 | `1` | Soft failure — a valid operation whose answer is negative (`find` target unachievable, `match` infeasible) |
-| `2` | Usage error — invalid input or arguments |
+| `2` | Usage error — invalid input, unknown flag or command, or a missing argument |
 
-Usage errors (`2`) are written to stderr with an `Error:` prefix. On a soft
-failure (`1`) the result payload is still written to **stdout** — `find` prints
-the closest reachable color, `--json` reports `"success": false` — so the exit
-code guards a pipeline while the data remains inspectable:
+`2` covers both an unusable *value* (`klar contrast notacolor "#000"`) and an
+unusable *invocation* (`klar find "#fff" "#000"` with no `--target`, a
+misspelled flag, an unknown command, or no command at all). Every usage error
+is written to stderr with an `Error:` prefix and prints nothing to stdout, so
+`1` always means "klar understood you, and the answer is no."
+
+On a soft failure (`1`) the result payload is still written to **stdout** —
+`find` prints the closest reachable color, `--json` reports `"success": false`
+— so the exit code guards a pipeline while the data remains inspectable:
 
 ```bash
 # Apply only when a compliant color was actually found
