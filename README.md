@@ -12,9 +12,15 @@ All commands run locally with zero network calls.
 ## What this is
 
 `klar` ships with **OKCA** (OK Contrast Algorithm) — a WCAG-compatible contrast
-algorithm on the familiar 1–21 scale, with **zero false passes** against the
-WCAG 2.x threshold across a 1,249-pair audit of Tailwind, the GOV.UK Design
-System, and USWDS v3.x.
+algorithm on the familiar WCAG scale, with **zero false passes** against the
+WCAG 2.x threshold.
+
+Since okca 2.0.0 that guarantee holds *by construction*, not just by sampling:
+`OKCA ≤ WCAG` is proven across the sRGB gamut via an exact identity plus
+interval-verified lemmas ([`docs/FP0_PROOF.md`](https://github.com/pawn002/okca/blob/main/docs/FP0_PROOF.md)),
+with a gamut-wide invariant enforced in okca's CI. The empirical battery — 1,249
+pairs across Tailwind, the GOV.UK Design System, and USWDS v3.x — remains at zero
+false passes and is now a cross-check on the proof rather than the basis for it.
 
 The problem OKCA solves:
 
@@ -100,7 +106,7 @@ klar contrast <color1> <color2> [options]
 
 | Type | Range | Meaning |
 |------|-------|---------|
-| `okca` | 1 to 21 | OKCA: OKLCH-native, WCAG-compatible ratio. 0 false passes vs WCAG (1,249-pair audit). |
+| `okca` | 1 to 21 (20.9 reachable) | OKCA: OKLCH-native, WCAG-compatible ratio. 0 false passes vs WCAG, proven across the sRGB gamut. Polarity-aware — light-on-dark caps at 20.9, dark-on-light at 20. |
 | `wcag2` | 1 to 21 | Traditional WCAG 2.x luminance ratio |
 | `deltaE` | 0 to 100 | Delta E 2000 perceptual color difference |
 
@@ -110,14 +116,14 @@ Additional algorithms are available as optional plugins — see [PLUGINS.md](PLU
 
 ```jsonc
 {
-  "contrast": 21,           // number — the calculated value
+  "contrast": 20.9,         // number — the calculated value
   "type": "okca",           // string — algorithm used
   "colorOne": "#ffffff",   // string — first color as provided
   "colorTwo": "#000000"    // string — second color as provided
 }
 ```
 
-**Quiet output:** single number, e.g. `21`
+**Quiet output:** single number, e.g. `20.9`
 
 **Examples:**
 
@@ -140,10 +146,11 @@ klar pair [options]
 **Options:**
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--min-lightness <n>` | | Minimum OKLCH lightness 0–100 |
-| `--max-lightness <n>` | | Maximum OKLCH lightness 0–100 |
 | `--json` | | JSON output |
 | `-q, --quiet` | | Print only two hex values space-separated |
+
+The generated pair is always a dark/light combination chosen for high
+contrast; its lightness range is not configurable.
 
 **JSON schema:**
 
@@ -151,7 +158,8 @@ klar pair [options]
 {
   "colorOne": "#1c2333",   // string — foreground hex
   "colorTwo": "#ffe3e8",   // string — background hex
-  "contrast": 13           // number — OKCA score between the pair
+  "contrast": 12           // integer — OKCA score, rounded to a whole number
+                           //   (unlike `contrast`, which reports one decimal)
 }
 ```
 
@@ -161,7 +169,6 @@ klar pair [options]
 
 ```bash
 klar pair
-klar pair --min-lightness 20 --max-lightness 80
 klar pair --json
 klar pair -q
 ```
@@ -238,7 +245,15 @@ is a meaningfully different color that an agent can act on.
 #### Fixed-step mode
 
 Activated by passing `--light-steps` and/or `--chroma-steps`, or by using `--color-space hsl`.
-Divides the space into uniform intervals. May produce out-of-gamut cells (`"color": ""`).
+Divides the space into uniform intervals and is **not gamut-aware**: cells outside
+sRGB are emitted as `"color": ""`, and they are frequently the majority —
+`--light-steps 10 --chroma-steps 5` on `#3b82f6` returns 50 cells, 36 of them empty.
+Filter before use, since passing `""` to another klar command is a usage error:
+
+```bash
+klar variants "#3b82f6" --light-steps 4 --chroma-steps 3 --json \
+  | jq -r '.[][] | select(.color != "") | .color'
+```
 
 ```
 klar variants <color> --light-steps <n> --chroma-steps <n> [--color-space <space>] [--json]
@@ -252,7 +267,7 @@ klar variants <color> --light-steps <n> --chroma-steps <n> [--color-space <space
 **Options:**
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--min-delta <n>` | `11` | Minimum Delta E 2000 between adjacent cells (adaptive mode) |
+| `--min-delta <n>` | `11` | Minimum Delta E 2000 between vertically adjacent cells in a column (adaptive mode) |
 | `--light-steps <n>` | | Fixed lightness steps — activates fixed-step mode |
 | `--chroma-steps <n>` | | Fixed chroma steps — activates fixed-step mode |
 | `--color-space <space>` | `oklch` | `oklch` or `hsl` (hsl forces fixed-step mode) |
@@ -303,8 +318,15 @@ klar match <color1> <color2> [options]
 **Arguments:**
 | Arg | Description |
 |-----|-------------|
-| `color1` | Color to adjust |
-| `color2` | Reference color (chroma source) |
+| `color1` | First color of the pair |
+| `color2` | Second color of the pair |
+
+Neither argument is fixed: klar rebuilds whichever color can adopt the other's
+chroma while staying inside the sRGB gamut, and returns the other untouched.
+When both directions are in gamut it converges on the **higher** of the two
+chromas. So `color1` may well be the one that comes back changed — read
+`colors` rather than assuming a direction. `chroma` is the resulting shared
+value.
 
 **Options:**
 | Flag | Description |
@@ -433,7 +455,10 @@ klar find "#ffffff" "#3b82f6" --target 4.5
 klar find "#000000" "#cccccc" --target 4.5 --type wcag2
 klar find "#ffffff" "#3b82f6" --target 4.5 --json
 klar find "#ffffff" "#3b82f6" --target 4.5 -q
-klar find "#ffffff" "#3b82f6" --target 7 --type okca --tolerance 0.1
+klar find "#ffffff" "#3b82f6" --target 5.5 --type okca --tolerance 0.1
+
+# This blue tops out at 5.9 on white, so a target of 7 exits 1
+klar find "#ffffff" "#3b82f6" --target 7
 ```
 
 ---
@@ -536,7 +561,11 @@ klar contrast "$FG" "$BG" --type wcag2 --json
 klar find "#ffffff" "#3b82f6" --target 4.5 --type wcag2 -q
 
 # Find accessible text for dark background
-klar find "#1a1a2e" "#e94560" --target 4.5 --type okca --json
+klar find "#1a1a2e" "#22c55e" --target 4.5 --type okca --json
+
+# A saturated color may have no passing shade — find only moves lightness,
+# so check the exit code rather than applying the output blindly.
+klar find "#1a1a2e" "#e94560" --target 4.5 --type okca --json  # exits 1
 
 # Check if the result actually meets the target
 ADJUSTED=$(klar find "#ffffff" "#3b82f6" --target 4.5 --type wcag2 -q)
@@ -616,14 +645,22 @@ klar follows a grep-style convention so scripts can branch on the outcome:
 
 | Code | Meaning |
 |------|---------|
-| `0` | Success — the operation produced a satisfying result |
+| `0` | Success — the operation produced a satisfying result (also `--help` and `--version`) |
 | `1` | Soft failure — a valid operation whose answer is negative (`find` target unachievable, `match` infeasible) |
-| `2` | Usage error — invalid input or arguments |
+| `2` | Usage error — invalid input, unknown flag or command, or a missing argument |
 
-Usage errors (`2`) are written to stderr with an `Error:` prefix. On a soft
-failure (`1`) the result payload is still written to **stdout** — `find` prints
-the closest reachable color, `--json` reports `"success": false` — so the exit
-code guards a pipeline while the data remains inspectable:
+`2` covers both an unusable *value* (`klar contrast notacolor "#000"`) and an
+unusable *invocation* (`klar find "#fff" "#000"` with no `--target`, a
+misspelled flag, an unknown command, or no command at all).
+
+Every usage error writes to **stderr** and leaves **stdout empty**, so `1`
+always means "klar understood you, and the answer is no." Most carry an
+`Error:` prefix; the exception is `klar` with no command, which prints the
+help text to stderr instead. Match on the exit code, not the message.
+
+On a soft failure (`1`) the result payload is still written to **stdout** —
+`find` prints the closest reachable color, `--json` reports `"success": false`
+— so the exit code guards a pipeline while the data remains inspectable:
 
 ```bash
 # Apply only when a compliant color was actually found

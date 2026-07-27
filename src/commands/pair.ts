@@ -6,17 +6,14 @@ import { formatPair } from '../formatters/human';
 export function pairCommand(): Command {
   const cmd = new Command('pair')
     .description('Generate a random accessible color pair')
-    .option('--min-lightness <n>', 'Minimum lightness 0-100', parseFloat)
-    .option('--max-lightness <n>', 'Maximum lightness 0-100', parseFloat)
     .option('--json', 'Output as JSON', false)
     .option('-q, --quiet', 'Print only the two hex values', false)
     .addHelpText('after', `
 Examples:
   $ klar pair
-  $ klar pair --min-lightness 20 --max-lightness 80
   $ klar pair --json
   $ klar pair -q`)
-    .action(async (opts: { minLightness?: number; maxLightness?: number; json: boolean; quiet: boolean }) => {
+    .action(async (opts: { json: boolean; quiet: boolean }) => {
       const outputOpts: OutputOptions = { json: opts.json, quiet: opts.quiet };
 
       const { colorUtilService, colorMetricsService } = getServices();

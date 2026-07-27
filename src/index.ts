@@ -10,6 +10,32 @@ import { pluginsCommand } from './commands/plugins';
 
 const pkg = require('../package.json');
 
+/**
+ * Bring commander's own argument errors under the documented exit-code
+ * contract (see utils/output.ts).
+ *
+ * commander defaults every parse error — unknown option, unknown command,
+ * missing argument, missing required option — to exit code 1, which is klar's
+ * *soft failure* code. That makes `klar find --targt 4.5` indistinguishable
+ * from "no color meets the target" to a script branching on `$?`. These are
+ * usage errors, so they exit 2 like `errorOut`, and their `error:` prefix is
+ * normalized to `Error:` to match it.
+ *
+ * Terminations commander already marks as successful (`--help`, `--version`)
+ * carry exitCode 0 and stay 0.
+ *
+ * Applied recursively: `addCommand()` does not call `copyInheritedSettings()`
+ * the way `.command()` does, so each subcommand needs this set on it directly
+ * or it keeps commander's defaults.
+ */
+function applyExitCodeContract(cmd: Command): void {
+  cmd.exitOverride((err) => process.exit(err.exitCode === 0 ? 0 : 2));
+  cmd.configureOutput({
+    outputError: (str, write) => write(str.replace(/^error:/, 'Error:')),
+  });
+  cmd.commands.forEach(applyExitCodeContract);
+}
+
 export function run(): void {
   const program = new Command();
 
@@ -33,6 +59,9 @@ export function run(): void {
   program.addCommand(lightnessCommand());
   program.addCommand(findCommand());
   program.addCommand(pluginsCommand());
+
+  // After every command is registered, so the walk reaches all of them.
+  applyExitCodeContract(program);
 
   program.parse(process.argv);
 }

@@ -23,6 +23,16 @@ function exitCode(args: string[]): number {
   }
 }
 
+/** Run the CLI and return its trimmed stderr. */
+function stderrOf(args: string[]): string {
+  try {
+    execFileSync(process.execPath, [CLI, ...args], { stdio: 'pipe' });
+    return '';
+  } catch (err) {
+    return ((err as { stderr: Buffer }).stderr?.toString() ?? '').trim();
+  }
+}
+
 /** Run the CLI and return { code, stdout }. */
 function run(args: string[]): { code: number; stdout: string } {
   try {
@@ -36,6 +46,9 @@ function run(args: string[]): { code: number; stdout: string } {
 
 const DARK_BG = 'oklch(0.24 0.03 248.99)';
 const NEUTRAL_BG = 'oklch(0.50 0 0)';
+// colorjs.io emits 3-digit shorthand when it can (#fff, #eee), so `find` may
+// print either form — the point of the assertion is that it prints a color.
+const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/;
 // A pair where neither color can adopt the other's chroma within sRGB.
 const INFEASIBLE = ['oklch(0.98 0.16 100)', 'oklch(0.20 0.18 280)'];
 
@@ -58,6 +71,8 @@ d('CLI exit-code contract', () => {
     });
   });
 
+  // A `--target` of 21 is above okca 2.0.0's light-on-dark cap (20.9), so it is
+  // unreachable for any pair — a stable fixture for the unachievable branch.
   describe('1 = soft failure (negative result)', () => {
     it.each([
       ['find unachievable human', ['find', NEUTRAL_BG, '#808080', '--target', '21']],
@@ -73,7 +88,7 @@ d('CLI exit-code contract', () => {
     it('find still prints the closest color to stdout on soft failure', () => {
       const { code, stdout } = run(['find', NEUTRAL_BG, '#808080', '--target', '21', '-q']);
       expect(code).toBe(1);
-      expect(stdout.trim()).toMatch(/^#[0-9a-f]{6}$/);
+      expect(stdout.trim()).toMatch(HEX);
     });
 
     it('find --json reports success:false on soft failure', () => {
@@ -90,6 +105,56 @@ d('CLI exit-code contract', () => {
       ['match bad input', ['match', 'nope', '#000']],
     ])('%s exits 2', (_label, args) => {
       expect(exitCode(args as string[])).toBe(2);
+    });
+
+    // commander defaults its own parse errors to exit 1, which is klar's
+    // soft-failure code. They are routed to 2 so a script branching on `$?`
+    // can tell "you typed it wrong" from "no answer exists".
+    it.each([
+      ['unknown option',          ['pair', '--min-lightness', '40']],
+      ['unknown option on subcmd', ['contrast', '#fff', '#000', '--nope']],
+      ['unknown command',         ['bogus']],
+      ['unknown nested command',  ['plugins', 'bogus']],
+      ['missing required option', ['find', '#fff', '#000']],
+      ['option missing its value', ['find', '#fff', '#000', '--target']],
+      ['missing argument',        ['contrast', '#fff']],
+      ['no command at all',       []],
+    ])('%s exits 2', (_label, args) => {
+      expect(exitCode(args as string[])).toBe(2);
+    });
+
+    it('reports usage errors on stderr with the same Error: prefix as input errors', () => {
+      const fromCommander = stderrOf(['pair', '--min-lightness', '40']);
+      const fromKlar = stderrOf(['contrast', 'notacolor', '#000']);
+      expect(fromCommander).toMatch(/^Error: /);
+      expect(fromKlar).toMatch(/^Error: /);
+    });
+
+    // The property a pipeline actually depends on: a usage error never puts
+    // anything on the data channel, so `1` is the only code that can carry a
+    // payload. `klar` with no command prints help to stderr, not stdout.
+    it.each([
+      ['unknown option',   ['pair', '--min-lightness', '40']],
+      ['unknown command',  ['bogus']],
+      ['missing argument', ['contrast', '#fff']],
+      ['bad color value',  ['contrast', 'notacolor', '#000']],
+      ['no command at all', []],
+    ])('%s writes nothing to stdout', (_label, args) => {
+      const { code, stdout } = run(args as string[]);
+      expect(code).toBe(2);
+      expect(stdout).toBe('');
+    });
+  });
+
+  describe('0 = help and version are not errors', () => {
+    it.each([
+      ['top-level help',   ['--help']],
+      ['version',          ['--version']],
+      ['subcommand help',  ['contrast', '--help']],
+      ['nested help',      ['plugins', 'list', '--help']],
+      ['help subcommand',  ['help', 'contrast']],
+    ])('%s exits 0', (_label, args) => {
+      expect(exitCode(args as string[])).toBe(0);
     });
   });
 });

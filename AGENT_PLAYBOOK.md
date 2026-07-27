@@ -11,19 +11,25 @@ All commands assume `klar` is on PATH.
 ## Key concepts agents must understand
 
 **OKCA is the default contrast algorithm.** OKCA (OK Contrast
-Algorithm) returns WCAG 2.x-compatible contrast ratios on the same
-1–21 scale, with improved perceptual modeling. It is the CLI default —
-no `--type` flag needed.
+Algorithm) returns WCAG 2.x-compatible contrast ratios on the familiar
+WCAG scale, with improved perceptual modeling. It is the CLI default —
+no `--type` flag needed. Ratios run from 1 to 20.9; the top of the
+range is 20.9 rather than 21 because the caps are polarity-aware (see
+below), so do not treat 21 as a reachable value.
 
 **OKCA is polarity-aware — argument order matters.** Throughout this
 playbook the convention is `klar contrast <foreground> <background>`.
-Light-on-dark pairs score up to 21; dark-on-light pairs are capped near
+Light-on-dark pairs score up to 20.9; dark-on-light pairs are capped at
 20 because the same luminance contrast is perceived as weaker when the
 text is darker than its surround. Concretely:
-`contrast "#fff" "#000"` ≈ 21, but `contrast "#000" "#fff"` ≈ 20, and
-swapping a chromatic pair like `#228b22` ↔ `#fff` returns different
-numbers. Always run `contrast` in the direction colors will actually be
-used (text-on-background), not its reverse.
+`contrast "#fff" "#000"` = 20.9, but `contrast "#000" "#fff"` = 20.
+
+Chromatic pairs are asymmetric too, and the gap is small enough that it
+can decide an AA verdict. `contrast "#fff" "#0055ff"` = 4.5 (passes AA
+body text), but `contrast "#0055ff" "#fff"` = 4.3 (fails). Always run
+`contrast` in the direction colors will actually be used
+(text-on-background), not its reverse — and never reuse a ratio you
+measured in the opposite order.
 
 **Built-in contrast algorithms (via `--type`):**
 - `okca` (default) — WCAG 2.x-compatible ratio, polarity-aware
@@ -83,8 +89,21 @@ distinguishable shades.
 If you need a uniform grid instead of the adaptive one (e.g. to populate
 a design-system scale at a specific size), `variants` also accepts
 `--light-steps N`, `--chroma-steps N`, and `--color-space hsl` as
-escape hatches. The output schema is identical; only the cell layout
-changes.
+escape hatches. The JSON keys are the same, but **fixed-step mode is not
+gamut-aware**: cells that fall outside sRGB are emitted with
+`"color": ""`, and they can be the majority. `--light-steps 4
+--chroma-steps 3` on this blue returns 12 cells of which 9 are empty.
+
+Passing an empty string to another klar command is a usage error
+(`Error: Invalid color:`, exit 2), so filter before you iterate:
+
+```bash
+klar variants "#3b82f6" --light-steps 4 --chroma-steps 3 --json \
+  | jq -r '.[][] | select(.color != "") | .color'
+```
+
+Prefer the adaptive default unless you specifically need fixed
+dimensions — it only ever emits in-gamut colors.
 
 ### Step 3: Check each variant against the background
 
@@ -148,18 +167,71 @@ Internally `find` evaluates OKCA as `(adjusted-foreground, background)`,
 so the `actualContrast` in the result corresponds to the polarity the
 adjusted color will be used in.
 
+**`find` moves lightness only — check `success` before using the
+result.** A saturated color has a narrow in-gamut lightness band, and
+`find` cannot leave it. The command above is one of those cases:
+
+```jsonc
+{
+  "adjustedColor": "#438aff",
+  "actualContrast": 2.2,
+  "success": false,          // 4.5 unreachable — exit code is 1
+  "message": "Target contrast 4.5 not achievable by adjusting lightness only (closest reached: 2.2). ..."
+}
+```
+
+`klar find` still prints its closest attempt on failure, so never apply
+the output without checking `success` (or the exit code).
+
+Diagnose it with `lightness`, which reports the sRGB-displayable L range
+at that color's chroma and hue:
+
+```bash
+klar lightness "$ORIGINAL" --json
+# { "lightMin": 0.466, "lightMax": 0.648, ... }
+```
+
+Blue at chroma 0.188 can only live between L 0.466 and L 0.648 — there
+is no lighter version of *that* blue to move to. When this happens, the
+chroma has to give. Pull candidates from `variants` (which walks chroma
+as well as lightness) and keep the ones that clear the target:
+
+```bash
+for V in $(klar variants "$ORIGINAL" --json | jq -r '.[][] | .color'); do
+  OKCA=$(klar contrast "$V" "$DARK_BG" -q)
+  awk -v c="$OKCA" -v v="$V" 'BEGIN { if (c >= 4.5) print v, c }'
+done
+# #cfd2d7 10.4
+# #bcd3f9 10
+# #a6a9ae 6.4
+# #94aace 5.9
+```
+
+`#bcd3f9` is the pick here — it keeps the most chroma of the four while
+clearing 4.5 comfortably.
+
+Report the trade to the art director explicitly: the color passes now,
+but it is less saturated than the brand blue.
+
 ### Step 3: Measure how much each color shifted
 
 The art director will ask "did it change much?" Compute deltaE between
-the original and the adjusted version:
+the original and whatever you settled on. Gate on `find`'s exit code so
+a failed search never silently becomes the answer:
 
 ```bash
-ADJUSTED=$(klar find "$DARK_BG" "$ORIGINAL" --target 4.5 -q)
-klar contrast "$ORIGINAL" "$ADJUSTED" --type deltaE -q
+if ADJUSTED=$(klar find "$DARK_BG" "$ORIGINAL" --target 4.5 -q); then
+  klar contrast "$ORIGINAL" "$ADJUSTED" --type deltaE -q
+else
+  echo "lightness alone was not enough — fall back to the variants sweep above"
+fi
 ```
 
 A deltaE under 10 means the color kept its character. Over 20 means it
-shifted substantially — flag this for the art director's review.
+shifted substantially — flag this for the art director's review. The
+`#bcd3f9` chosen above is a deltaE of 25 from the brand blue: it passes,
+but it is a visibly different color and the art director has to sign off
+on it. That is the honest report, not a silent substitution.
 
 ### Step 4: Align chromas across the palette
 
@@ -218,16 +290,33 @@ Any pair below threshold is a failure. Report:
 
 ### Step 4: Suggest fixes for failures
 
-For each failing pair, use `find` to propose an adjusted foreground:
+For each failing pair, use `find` to propose an adjusted foreground —
+and gate on its exit code. `find` prints its closest attempt even when
+it fails, so an ungated version of this loop will hand the art director
+colors that still do not pass, labelled as fixes. On the token set
+above, 4 of the 11 failing pairs are in exactly that state.
 
 ```bash
-ADJUSTED=$(klar find "$BG" "$FG" --target 4.5 -q)
-DRIFT=$(klar contrast "$FG" "$ADJUSTED" --type deltaE -q)
-echo "Suggest $FG → $ADJUSTED (deltaE drift: $DRIFT)"
+if ADJUSTED=$(klar find "$BG" "$FG" --target 4.5 -q); then
+  DRIFT=$(klar contrast "$FG" "$ADJUSTED" --type deltaE -q)
+  echo "  fix: $FG -> $ADJUSTED (deltaE drift: $DRIFT)"
+else
+  BEST=$(klar find "$BG" "$FG" --target 4.5 --json | jq -r '.actualContrast')
+  echo "  UNFIXABLE by lightness: $FG on $BG tops out at $BEST — needs a chroma change"
+fi
 ```
 
-Present the fix with its deltaE drift so the art director can judge
-whether the adjustment is acceptable.
+```
+=== On #ffffff ===
+  fix: #3b82f6 -> #115bcc (deltaE drift: 15)
+  fix: #e94560 -> #bf103f (deltaE drift: 13)
+  UNFIXABLE by lightness: #22c55e on #ffffff tops out at 2.2 — needs a chroma change
+```
+
+Present each fix with its deltaE drift so the art director can judge
+whether the adjustment is acceptable. Report the unfixable ones as their
+own category — they need a different color, not a nudge, and the
+`variants` sweep in Workflow 2 Step 2 is how you find candidates.
 
 ---
 
@@ -279,12 +368,15 @@ and hue were preserved.
 
 **`pair`** generates a random color pair that meets a target OKCA
 contrast. Useful as a seed for accent exploration or when you need an
-accessible pair to demonstrate something quickly.
+accessible pair to demonstrate something quickly. It takes no tuning
+options — the dark/light split is fixed. Note that `pair` rounds its
+`contrast` to a whole number, unlike `contrast`, which reports one
+decimal; re-measure with `klar contrast` if you need the precise ratio.
 
 ```bash
 klar pair --json
-# {"colorOne":"#212535","colorTwo":"#ffe3e9","contrast":11}
-klar pair --min-lightness 0.4 --max-lightness 0.9 -q
+# {"colorOne":"#212535","colorTwo":"#ffe3e9","contrast":12}
+klar pair -q
 # space-separated hex pair, no JSON
 ```
 
@@ -305,57 +397,65 @@ klar plugins list
 **Situation:** "Give me 5 accent colors that all look different from
 each other and all work on this background."
 
-### Step 1: Generate candidates from variants
+Filter on contrast **first**. It is the hard constraint — a color that
+fails AA is unusable no matter how distinct it looks — and it eliminates
+most candidates, so checking distinctness first wastes work on colors
+you are about to discard.
+
+### Step 1: Generate candidates and keep only the accessible ones
 
 ```bash
-klar variants "$BASE_COLOR" --min-delta 11 --json \
-  | jq '[.[][] | .color]'
+BG="#ffffff"
+ACCESSIBLE=()
+for C in $(klar variants "#3b82f6" --json | jq -r '.[][] | .color'); do
+  OKCA=$(klar contrast "$C" "$BG" -q)
+  awk -v c="$OKCA" 'BEGIN{exit (c>=4.5)?0:1}' && ACCESSIBLE+=("$C")
+done
+printf '%s\n' "${ACCESSIBLE[@]}"
 ```
 
-The adaptive grid guarantees that vertical neighbors (within a column)
-differ by >= 11 deltaE, and non-adjacent cells may be even more distinct.
+On this blue, 6 of the 16 adaptive variants clear AA body text on white:
+`#4a4d51 #3c506f #2a2c30 #1d2e4c #040507 #000922`. Expect attrition
+this steep — a mid-lightness hue has few shades dark enough to pass on
+white, so most of the grid is ruled out here rather than at the end.
 
-### Step 2: Check mutual distinctness
-
-For every pair of candidates, verify they are distinguishable:
+### Step 2: Check mutual distinctness among the survivors
 
 ```bash
-COLORS=("#3b82f6" "#1e65d7" "#84878c" "#596d8f" "#6a6d71")
-for i in "${!COLORS[@]}"; do
-  for j in $(seq $((i+1)) $((${#COLORS[@]}-1))); do
-    DE=$(klar contrast "${COLORS[$i]}" "${COLORS[$j]}" --type deltaE -q)
-    echo "${COLORS[$i]} vs ${COLORS[$j]}: deltaE=$DE"
+for i in "${!ACCESSIBLE[@]}"; do
+  for j in $(seq $((i+1)) $((${#ACCESSIBLE[@]}-1))); do
+    DE=$(klar contrast "${ACCESSIBLE[$i]}" "${ACCESSIBLE[$j]}" --type deltaE -q)
+    awk -v d="$DE" 'BEGIN{exit (d<11)?0:1}' \
+      && echo "  too similar: ${ACCESSIBLE[$i]} / ${ACCESSIBLE[$j]} (deltaE=$DE)"
   done
 done
 ```
 
-All pairs should have deltaE >= 11 (or whatever the art director's
-threshold is). Drop any color that is too similar to another.
+Here all 15 pairs are >= 11 deltaE, so any 5 of the 6 answer the brief.
+If a pair is too similar, drop the one with the weaker contrast.
 
-### Step 3: Verify all pass contrast against the background
+If fewer than 5 survive both filters, do not pad the list with failing
+colors — say so, and offer the options: relax to the large-text
+threshold (3.0), use a darker background, or introduce a second hue.
+
+### Step 3: Align chromas for visual harmony
+
+Accents that share the same chroma look intentional rather than random:
 
 ```bash
-BG="#ffffff"
-for C in "${COLORS[@]}"; do
-  OKCA=$(klar contrast "$C" "$BG" -q)
-  echo "$C  OKCA=$OKCA"
+for C in "${ACCESSIBLE[@]:1}"; do
+  klar match "${ACCESSIBLE[0]}" "$C" --json | jq '{matched: .colors, chroma: .chroma}'
 done
 ```
 
-### Step 4: Align chromas for visual harmony
+**`match` does not preserve its first argument.** It rebuilds whichever
+color can adopt the other's chroma inside sRGB, so either argument may
+come back changed — read `.colors` rather than assuming the reference
+survived. It can also fail outright (`success: false`, exit 1) when
+neither color can adopt the other's chroma.
 
-Accents that share the same chroma look intentional rather than random.
-Pick one as the reference and match the others:
-
-```bash
-REF="${COLORS[0]}"
-for C in "${COLORS[@]:1}"; do
-  klar match "$REF" "$C" --json | jq '{matched: .colors, chroma: .chroma}'
-done
-```
-
-After matching, re-verify contrast (chroma changes can shift OKCA
-slightly).
+After matching, re-verify contrast: chroma changes shift OKCA, and a
+color that just cleared 4.5 can drop below it.
 
 ---
 
@@ -421,6 +521,7 @@ for color accessibility checks. `klar` is available on PATH.
 When working with colors, use `klar` commands:
 - `klar contrast <fg> <bg>` — check contrast (OKCA ratio, WCAG-compatible)
 - `klar find <bg> <color> --target 4.5` — adjust a color to pass
+  (exits 1 if the target is unreachable — check before using the result)
 - `klar meta <color>` — inspect OKLCH values
 - `klar variants <color>` — generate palette options
 Always use `--json` for programmatic consumption and `-q` for single values.
@@ -441,23 +542,35 @@ When asked to check, generate, or modify colors, always use `klar`
 rather than manual calculation or third-party web tools.
 
 ### Key rules
-- **OKCA is the default.** OKCA returns WCAG 2.x-compatible ratios on the
-  1–21 scale with improved perceptual modeling. No `--type` flag needed.
+- **OKCA is the default.** OKCA returns WCAG 2.x-compatible ratios from 1 to
+  20.9 with improved perceptual modeling. No `--type` flag needed. 21 is not
+  reachable — the caps are polarity-aware.
 - **OKCA is polarity-aware.** Argument order matters: always use
-  `klar contrast <foreground> <background>`. Light-on-dark caps near 21;
-  dark-on-light caps near 20. The same chromatic pair returns different
-  numbers when swapped.
+  `klar contrast <foreground> <background>`. Light-on-dark caps at 20.9;
+  dark-on-light caps at 20. The same chromatic pair returns different
+  numbers when swapped, and the gap can flip an AA verdict — never reuse a
+  ratio measured in the opposite order.
 - **Other algorithms via `--type`:** built-ins are `wcag2` and `deltaE`.
   Additional algorithms may be available as optional plugins — run
   `klar plugins list` to see what's registered in this environment.
 - **Use OKLCH thinking.** Understand colors via `klar meta` before modifying.
 - **deltaE measures perceptual drift.** Use `klar contrast <a> <b> --type deltaE`
   to quantify how much a color changed. < 3 is imperceptible, 11+ is clearly different.
+- **`klar find` only moves lightness.** A saturated color has a narrow
+  in-gamut lightness band, so the target is often unreachable and the command
+  exits 1 — this is common, not an edge case. When it happens the color needs
+  a chroma change: sweep `klar variants` and filter by contrast instead.
+- **`klar match` does not preserve its first argument.** It rebuilds whichever
+  color can adopt the other's chroma within sRGB, so read `.colors` rather
+  than assuming the reference survived.
 - **Always verify after adjusting.** After `klar find` or `klar match`, re-check
   contrast and deltaE to confirm the result.
-- **Check the exit code.** `find`/`match` exit `1` when the target can't be met
-  (the closest result is still printed — don't apply it blindly), `2` on invalid
-  input, `0` on success. In scripts, gate on it:
+- **Check the exit code.** `0` on success. `1` is a soft failure — klar
+  understood the request and the answer is negative (`find` target
+  unreachable, `match` infeasible); the closest result is still printed, so
+  don't apply it blindly. `2` is a usage error — a bad color value, a
+  misspelled flag, an unknown command, or a missing argument — and prints
+  nothing to stdout. In scripts, gate on it:
   `c=$(klar find "<bg>" "<color>" --target 4.5 -q) && use "$c" || handle_failure`.
 
 ### WCAG thresholds

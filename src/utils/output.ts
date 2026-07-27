@@ -24,11 +24,15 @@ export function output(data: unknown, opts: OutputOptions): void {
 
 /**
  * Exit-code contract (grep-style):
- *   0 — success: the operation produced a satisfying result
+ *   0 — success: the operation produced a satisfying result (also --help/--version)
  *   1 — soft failure: a valid operation whose answer is negative
  *       (e.g. `find` target unachievable, `match` infeasible). The payload is
  *       still written to stdout so consumers can inspect the closest result.
- *   2 — usage error: invalid input or arguments (handled by `errorOut`).
+ *   2 — usage error: invalid input or arguments. Raised here by `errorOut` for
+ *       bad values, and by commander for bad invocations (unknown flag or
+ *       command, missing argument) — see `applyExitCodeContract` in index.ts,
+ *       which remaps commander's default of 1 so it stops colliding with the
+ *       soft-failure code above.
  */
 
 /** Usage / input error: write `Error:` to stderr and exit 2. */

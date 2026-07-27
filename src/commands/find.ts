@@ -10,16 +10,24 @@ export function findCommand(): Command {
     .description('Find a color that meets a target contrast by adjusting lightness')
     .argument('<base-color>', 'Color to keep fixed')
     .argument('<reference-color>', 'Color to adjust')
-    .requiredOption('--target <n>', 'Target contrast value', parseFloat)
+    .requiredOption('--target <n>', 'Target contrast value (required)', parseFloat)
     .option('-t, --type <type>', 'Algorithm: okca, wcag2, deltaE (built-in), plus any installed contrast-algorithm plugins', 'okca')
     .option('--tolerance <n>', 'Acceptable overshoot above the target (never accepts below it)', parseFloat, 0.5)
     .option('--json', 'Output as JSON', false)
     .option('-q, --quiet', 'Print only the adjusted color hex', false)
     .addHelpText('after', `
+Only lightness is adjusted — chroma and hue are preserved. A saturated
+color has a narrow in-gamut lightness band, so the target is often out of
+reach; then the closest color is still printed and the command exits 1.
+Check the exit code (or "success" in --json) before using the result.
+
 Examples:
-  $ klar find "#ffffff" "#3b82f6" --target 7 --type okca
+  $ klar find "#ffffff" "#3b82f6" --target 4.5 --type okca
   $ klar find "#000" "#ccc" --target 4.5 --type wcag2
-  $ klar find "#ffffff" "#3b82f6" --target 60 --json`)
+  $ klar find "#ffffff" "#3b82f6" --target 5.5 --json
+
+  # Unreachable: this blue tops out at 5.9 on white, so this exits 1
+  $ klar find "#ffffff" "#3b82f6" --target 7`)
     .action(async (baseColor: string, referenceColor: string, opts: {
       target: number;
       type: string;
