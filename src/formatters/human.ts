@@ -6,10 +6,19 @@
  * from CommonJS without dynamic import gymnastics.
  */
 import Color from 'colorjs.io';
+import { GamutMode, DEFAULT_GAMUT_MODE, toRgb255 as gamutToRgb255 } from '../services/gamut';
 
-/** Render an ANSI true-color block: ██ */
-export function colorSwatch(color: string): string {
-  const rgb = toRgb255(color);
+/**
+ * Render an ANSI true-color block: ██
+ *
+ * The swatch must show the same color the reported number was computed on, so
+ * it takes the caller's gamut policy. It previously clamped per channel purely
+ * to keep the escape sequence valid, which happened to match what browsers
+ * paint while `contrast` scored a chroma-reduced color — one line of output
+ * showing one color and reporting a number for another.
+ */
+export function colorSwatch(color: string, gamut: GamutMode = DEFAULT_GAMUT_MODE): string {
+  const rgb = toRgb255(color, gamut);
   if (!rgb) return '██';
   // \x1b[48;2;R;G;Bm sets background, \x1b[38;2;R;G;Bm sets foreground
   return `\x1b[38;2;${rgb[0]};${rgb[1]};${rgb[2]}m██\x1b[0m`;
@@ -25,15 +34,9 @@ export function colorSwatch(color: string): string {
  * colors (most of the documented examples), while accepting bare `ff0000`
  * that klar itself rejects.
  */
-function toRgb255(color: string): [number, number, number] | null {
+function toRgb255(color: string, gamut: GamutMode): [number, number, number] | null {
   try {
-    const coords = new Color(color).to('srgb').coords;
-    // Out-of-gamut coordinates fall outside 0-1; clamp so the escape stays valid.
-    return coords.map((c) => Math.max(0, Math.min(255, Math.round(c * 255)))) as [
-      number,
-      number,
-      number,
-    ];
+    return gamutToRgb255(new Color(color), gamut);
   } catch {
     return null;
   }
@@ -46,13 +49,40 @@ export function formatContrast(data: {
   colorTwo: string;
   unit?: string;
   category?: string;
+  gamut?: {
+    mode: GamutMode;
+    outOfGamut: boolean;
+    colorOne: { outOfGamut: boolean; measured: string };
+    colorTwo: { outOfGamut: boolean; measured: string };
+  };
 }): string {
   const label = data.category === 'dimension' ? 'Min Dimension' : 'Contrast';
   const value = data.unit ? `${data.contrast} ${data.unit}` : `${data.contrast}`;
+  const mode = data.gamut?.mode ?? DEFAULT_GAMUT_MODE;
   const lines = [
     `${label} (${data.type.toUpperCase()}): ${value}`,
-    `  ${colorSwatch(data.colorOne)} ${data.colorOne} → ${colorSwatch(data.colorTwo)} ${data.colorTwo}`,
+    `  ${colorSwatch(data.colorOne, mode)} ${data.colorOne} → ${colorSwatch(data.colorTwo, mode)} ${data.colorTwo}`,
   ];
+
+  // An out-of-gamut input is the one case where the number does not describe
+  // the color the user typed. Say so on the spot: silence here reads as "this
+  // color is fine", and the error always runs in the permissive direction.
+  if (data.gamut?.outOfGamut) {
+    const outside: string[] = [];
+    if (data.gamut.colorOne.outOfGamut) {
+      outside.push(`foreground → ${data.gamut.colorOne.measured}`);
+    }
+    if (data.gamut.colorTwo.outOfGamut) {
+      outside.push(`background → ${data.gamut.colorTwo.measured}`);
+    }
+    lines.push(
+      `  ! outside sRGB, measured as ${mode === 'clip' ? 'painted' : mode}: ${outside.join(', ')}`,
+    );
+    if (mode !== 'none') {
+      lines.push(`    On a wider-gamut display the color clips less and real contrast is higher.`);
+    }
+  }
+
   return lines.join('\n');
 }
 

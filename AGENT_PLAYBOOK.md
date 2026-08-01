@@ -56,6 +56,38 @@ color. Use `lightness` to find the actual L range for a given C and H.
 The adaptive `variants` grid already handles this — every cell it emits
 is in-gamut.
 
+**`contrast` measures colors as painted, not as authored.** When a color
+sits outside sRGB, the display shows something else, and `contrast`
+reports the number for what is shown. So a figure for an out-of-gamut
+token is *lower* than its authored coordinates would suggest, and that
+lower number is the real one — do not "correct" it back.
+
+Two consequences when auditing tokens authored in OKLCH:
+
+- Read `gamut.outOfGamut` from `--json` when you need to detect the case.
+  `-q` gives the safe number but cannot signal anything alongside it.
+- If `find` fails on an out-of-gamut color, the target is not necessarily
+  unachievable. `find` only moves lightness; the axis that fixes an
+  out-of-gamut color is **chroma**. Reducing chroma brings the color into
+  gamut, so authored and painted converge and real contrast rises while
+  lightness and hue hold. Sweep chroma manually before reporting the
+  target as impossible:
+
+  ```bash
+  # find says unachievable — it only has the lightness axis
+  klar find "oklch(1 0 0)" "oklch(0.79 0.22 25)" --target 6 -q   # exits 1
+
+  # but chroma solves it
+  for C in 0.22 0.15 0.12 0.10; do
+    echo "$C -> $(klar contrast "oklch(0.79 $C 25)" "#070e16" -q)"
+  done
+  # 0.22 -> 4    0.15 -> 5.9    0.12 -> 6.9    0.10 -> 7.5
+  ```
+
+Pass `--gamut css` to reproduce a figure recorded with klar 2.x, and
+`--gamut none --type wcag2` for the colorimetric value of the color as
+specified. Neither describes what a user sees on an sRGB display.
+
 ---
 
 ## Workflow 1 — Build a palette from a hero color

@@ -8,6 +8,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `@pawn002/klar-plugin-interface` and `@pawn002/klar-plugin-registry` are versioned
 independently from `klar-cli`; entries below note when they move.
 
+## [3.0.0] - 2026-08-01
+
+### Breaking
+
+- **`contrast` now measures colors as an sRGB display paints them** ([#9]). A color
+  authored in OKLCH can sit outside the sRGB gamut; the browser paints something
+  else, and the contrast a user experiences is lower. klar reported the higher
+  figure with nothing in the output to signal it, so an out-of-gamut token could
+  read as a comfortable pass and render as a clear fail —
+  `contrast "oklch(0.79 0.22 25)" "#070e16"` returned `6.1` where the painted color
+  measures `4.0`, against a `4.5` floor. **Every figure recorded for an
+  out-of-gamut color changes, always downward. In-gamut colors are unaffected.**
+  Re-validate any tokens authored in OKLCH. Pass `--gamut css` to reproduce a 2.x
+  figure exactly.
+
+  The old number was not the colorimetric value of the authored color either. It
+  came from hex serialization silently applying CSS Color 4 gamut mapping, so
+  `oklch(0.79 0.22 25)` was scored as `#ff938b` — neither what was authored nor
+  what any display paints.
+
+- **`--type` no longer changes the gamut policy.** `wcag2` and `deltaE` scored raw
+  unclipped coordinates while `okca` and plugins scored a chroma-reduced color. The
+  policy is now applied once at the input boundary, so all algorithms agree on what
+  color they are measuring. `wcag2` on the pair above moves `9.2` → `7.4`.
+
+### Added
+
+- **`-g, --gamut <mode>` on `contrast`** — `clip` (default; what browsers paint),
+  `css` (CSS Color 4 chroma reduction, reproducing klar 2.x), or `none` (the
+  authored color, unmapped). `none` is rejected with exit `2` for algorithms that
+  take hex (`okca`, plugins) rather than silently substituting a mapped color.
+- **`gamut` object in `contrast --json`** — carries `mode`, a top-level
+  `outOfGamut` boolean, and per-color `outOfGamut` plus the `measured` value the
+  figure was computed on. `-q` is a bare number with no room for a caveat, so this
+  is how scripts detect the case.
+- Human-readable output notes when an input is outside sRGB, shows the color it
+  measured, and points out that a wider-gamut display clips less.
+
+### Fixed
+
+- **The contrast swatch and the contrast number disagreed.** A single line of
+  `klar contrast` output rendered one color (`#ff746f`, per-channel clipped) and
+  reported a number computed on another (`#ff938b`, chroma-reduced). klar had two
+  unrelated gamut conversions; the correct one existed only incidentally, as
+  escape-sequence range-guarding in the ANSI swatch. Both now route through a
+  single documented policy in `services/gamut.ts`.
+- `ColorUtilService.getRgb255Array` rounded raw sRGB coordinates with no clamp, so
+  an out-of-gamut color produced values outside 0–255.
+
+### Changed
+
+- Test suite split into two jest projects. Most specs run against the simplified
+  `colorjs.io` mock, whose color math is approximate — which is why no existing
+  test could have caught this defect. Specs named `*.real.spec.ts` resolve the real
+  library and pin concrete values against what a browser paints.
+
+### Known issues
+
+- `find` still adjusts lightness only, so it reports "unachievable" and exits `1`
+  on out-of-gamut colors that reducing **chroma** would fix — exactly the colors
+  gamut-aware `contrast` now flags. Documented in the README and the agent
+  playbook; a chroma axis is tracked separately.
+
 ## [2.0.0] - 2026-07-27
 
 ### Breaking
@@ -101,7 +164,9 @@ Initial release.
   `klar plugins list` now surfaces each plugin's source, version, and resolved path,
   and flags plugins loaded from outside the project.
 
+[3.0.0]: https://github.com/pawn002/klar/compare/v2.0.0...v3.0.0
 [2.0.0]: https://github.com/pawn002/klar/compare/v1.0.1...v2.0.0
 [1.0.1]: https://github.com/pawn002/klar/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/pawn002/klar/releases/tag/v1.0.0
 [#2]: https://github.com/pawn002/klar/pull/2
+[#9]: https://github.com/pawn002/klar/issues/9

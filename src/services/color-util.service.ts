@@ -1,6 +1,7 @@
 import Color from 'colorjs.io';
 import { OkcaService } from './okca.service';
 import { PluginRegistry } from '@pawn002/klar-plugin-registry';
+import { GamutMode, DEFAULT_GAMUT_MODE, applyGamut, toGamutHex, toRgb255 } from './gamut';
 import {
   ColorPair,
   ColorCoordArray,
@@ -27,16 +28,20 @@ export class ColorUtilService {
     }
   }
 
-  getRgb255Array(color: string): [number, number, number] | null {
+  /**
+   * 8-bit RGB for a color under a gamut policy.
+   *
+   * This used to round raw sRGB coordinates with no clamp, so an out-of-gamut
+   * color produced values outside 0–255 (negative, or above 255) that no
+   * consumer could use. It now shares the swatch's conversion.
+   */
+  getRgb255Array(
+    color: string,
+    gamut: GamutMode = DEFAULT_GAMUT_MODE,
+  ): [number, number, number] | null {
     const colorObj = this.parseColor(color);
     if (!colorObj) return null;
-
-    const coords = colorObj.to('srgb').coords;
-    return [
-      Math.round(coords[0] * 255),
-      Math.round(coords[1] * 255),
-      Math.round(coords[2] * 255),
-    ];
+    return toRgb255(colorObj, gamut);
   }
 
   createSrgbColor(color: string, lightness: number): string | null {
@@ -180,20 +185,22 @@ export class ColorUtilService {
     return pair;
   }
 
-  calcDeltaE(colorOne: string, colorTwo: string): number | null {
+  calcDeltaE(colorOne: string, colorTwo: string, gamut: GamutMode = DEFAULT_GAMUT_MODE): number | null {
     const c1 = this.parseColor(colorOne);
     const c2 = this.parseColor(colorTwo);
     if (!c1 || !c2) return null;
 
-    return Math.round(c1.deltaE2000(c2));
+    return Math.round(applyGamut(c1, gamut).deltaE2000(applyGamut(c2, gamut)));
   }
 
-  calcWcag2(colorOne: string, colorTwo: string): number | null {
+  calcWcag2(colorOne: string, colorTwo: string, gamut: GamutMode = DEFAULT_GAMUT_MODE): number | null {
     const c1 = this.parseColor(colorOne);
     const c2 = this.parseColor(colorTwo);
     if (!c1 || !c2) return null;
 
-    return parseFloat(c1.contrast(c2, 'WCAG21').toFixed(1));
+    return parseFloat(
+      applyGamut(c1, gamut).contrast(applyGamut(c2, gamut), 'WCAG21').toFixed(1),
+    );
   }
 
   getColorMeta(color: string): ColorMetaObj | null {
@@ -487,8 +494,13 @@ export class ColorUtilService {
     return accepted;
   }
 
-  toHex(color: Color): string {
-    return color.to('srgb').toString({ format: 'hex' });
+  /**
+   * Hex under a gamut policy. This previously delegated straight to colorjs.io
+   * serialization, which silently applied CSS Color 4 chroma reduction — see
+   * the note at the top of `gamut.ts`.
+   */
+  toHex(color: Color, gamut: GamutMode = DEFAULT_GAMUT_MODE): string {
+    return toGamutHex(color, gamut);
   }
 
   toOKLCH(color: Color): { l: number; c: number; h: number } {
@@ -504,6 +516,7 @@ export class ColorUtilService {
     colorOne: string,
     colorTwo: string,
     contrastType: string,
+    gamut: GamutMode = DEFAULT_GAMUT_MODE,
   ): number | null {
     const c1 = this.parseColor(colorOne);
     const c2 = this.parseColor(colorTwo);
@@ -511,21 +524,28 @@ export class ColorUtilService {
 
     switch (contrastType) {
       case 'deltaE':
-        return this.calcDeltaE(colorOne, colorTwo);
+        return this.calcDeltaE(colorOne, colorTwo, gamut);
       case 'wcag2':
-        return this.calcWcag2(colorOne, colorTwo);
+        return this.calcWcag2(colorOne, colorTwo, gamut);
       case 'okca':
-        return this.okcaService.contrast(this.toHex(c1), this.toHex(c2));
+        return this.okcaService.contrast(this.toHex(c1, gamut), this.toHex(c2, gamut));
       default: {
-        const h1 = this.toHex(c1);
-        const h2 = this.toHex(c2);
+        const h1 = this.toHex(c1, gamut);
+        const h2 = this.toHex(c2, gamut);
         return this.pluginRegistry?.get(contrastType)?.calculate(h1, h2) ?? null;
       }
     }
   }
 
   findColorForTargetContrast(options: TargetContrastOptions): TargetContrastResult {
-    const { baseColor, referenceColor, targetContrast, contrastType, tolerance = 0.5 } = options;
+    const {
+      baseColor,
+      referenceColor,
+      targetContrast,
+      contrastType,
+      tolerance = 0.5,
+      gamut = DEFAULT_GAMUT_MODE,
+    } = options;
 
     const refColorObj = this.parseColor(referenceColor);
     if (!refColorObj) throw new Error('Invalid reference color');
@@ -565,7 +585,7 @@ export class ColorUtilService {
       }
 
       const testColorHex = testColor.to('srgb').toString({ format: 'hex' });
-      const contrast = this.calculateContrastByType(testColorHex, baseColor, contrastType);
+      const contrast = this.calculateContrastByType(testColorHex, baseColor, contrastType, gamut);
       iterations++;
 
       if (contrast === null) continue;
@@ -616,7 +636,7 @@ export class ColorUtilService {
     // reached (not the unchanged input), clearly marked as a failure.
     const fallback = bestAchievable ?? {
       hex: referenceColor,
-      contrast: this.calculateContrastByType(referenceColor, baseColor, contrastType) ?? 0,
+      contrast: this.calculateContrastByType(referenceColor, baseColor, contrastType, gamut) ?? 0,
       l: originalLightness,
     };
     return {

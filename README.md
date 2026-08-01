@@ -99,6 +99,7 @@ klar contrast <color1> <color2> [options]
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-t, --type <type>` | `okca` | Algorithm: `okca`, `wcag2`, `deltaE` (built-in), plus any installed plugins |
+| `-g, --gamut <mode>` | `clip` | Out-of-gamut handling — see [Out-of-gamut colors](#out-of-gamut-colors) |
 | `--json` | | JSON output |
 | `-q, --quiet` | | Print only the numeric contrast value |
 
@@ -119,11 +120,56 @@ Additional algorithms are available as optional plugins — see [PLUGINS.md](PLU
   "contrast": 20.9,         // number — the calculated value
   "type": "okca",           // string — algorithm used
   "colorOne": "#ffffff",   // string — first color as provided
-  "colorTwo": "#000000"    // string — second color as provided
+  "colorTwo": "#000000",   // string — second color as provided
+  "gamut": {
+    "mode": "clip",         // string — the policy applied
+    "outOfGamut": false,    // boolean — true if either color is outside sRGB
+    "colorOne": { "outOfGamut": false, "measured": "#ffffff" },
+    "colorTwo": { "outOfGamut": false, "measured": "#000000" }
+  }
 }
 ```
 
+`measured` is the color the contrast figure was actually computed on. When
+`outOfGamut` is `false` it equals the input; when `true` it is the input as an
+sRGB display renders it.
+
 **Quiet output:** single number, e.g. `20.9`
+
+#### Out-of-gamut colors
+
+A color authored in OKLCH can sit outside the sRGB gamut. It still has to become
+*something* before a display shows it, and that something is what a user
+experiences — so `contrast` measures the color **as painted**, not as authored.
+A contrast figure for a color that cannot be displayed is not an accessibility
+measurement.
+
+```bash
+klar contrast "oklch(0.79 0.22 25)" "#070e16" -q
+# 4        — measures #ff746f, which is what a browser paints
+
+klar contrast "oklch(0.79 0.22 25)" "#070e16" -q --gamut none --type wcag2
+# 9.2      — the colorimetric value of the color as specified
+```
+
+| Mode | Behavior |
+|------|----------|
+| `clip` *(default)* | Clamp each sRGB channel into range — what browsers paint today |
+| `css` | CSS Color 4 gamut mapping (chroma reduction). Reproduces klar 2.x figures |
+| `none` | Measure the authored color, unmapped. Rejected for algorithms that take hex (`okca`, plugins), since hex cannot represent an out-of-gamut color |
+
+Two caveats worth holding onto:
+
+- **`clip` describes today's browsers, not the spec.** CSS Color 4 specifies
+  chroma reduction, and the two disagree: Chrome paints `oklch(0.45 0.22 25)` as
+  `#b00000`, while the spec algorithm gives `#a9000b`. Engines are expected to
+  move toward the spec; when they do, `css` becomes the accurate answer.
+- **"As painted" is one number per output space.** On a P3 display the color
+  clips less and real contrast is *higher*. sRGB is the conservative case, and
+  the right one to hold an accessibility floor against.
+
+Scripts consuming `-q` get the safe number by default. Scripts that need to
+detect the case should read `gamut.outOfGamut` from `--json`.
 
 **Examples:**
 
@@ -133,6 +179,7 @@ klar contrast "#fff" "#000" --type wcag2
 klar contrast "#fff" "#000" --type okca --json
 klar contrast "oklch(50% 0.2 240)" "#000" -q
 klar contrast "rgb(59,130,246)" "#ffffff" --type deltaE
+klar contrast "oklch(0.79 0.22 25)" "#070e16" --gamut css   # 2.x-compatible figure
 ```
 
 ---
@@ -443,6 +490,22 @@ klar find <base-color> <reference-color> [options]
 When `success` is `false` the target is unachievable by adjusting lightness
 alone: `adjustedColor` holds the **closest reachable** color, `message` explains
 why, and the command **exits 1** (see [Exit Codes](#exit-codes)).
+
+> **Known limitation — out-of-gamut reference colors.** `find` adjusts lightness
+> only, at the reference color's authored chroma. When that chroma puts the color
+> outside sRGB at *every* lightness, no candidate is reachable, so `find` returns
+> the input unchanged and exits `1` — even though reducing **chroma** would bring
+> the color into gamut and raise real contrast while holding lightness and hue:
+>
+> ```bash
+> klar find "oklch(1 0 0)" "oklch(0.45 0.22 25)" --target 9.5 -q
+> # oklch(0.45 0.22 25)   — exit 1, unchanged
+> ```
+>
+> These are exactly the colors that gamut-aware `contrast` now flags, so the two
+> commands disagree on whether a fix exists. Adding a chroma axis is tracked
+> separately; until then, treat a `find` failure on an out-of-gamut reference as
+> "not solvable by lightness", not as "not solvable".
 
 **Quiet output:** adjusted hex, e.g. `#2563eb`. On a soft failure the closest
 color is still printed, but the command exits `1` — so `$(klar find … -q)`

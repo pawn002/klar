@@ -1,3 +1,5 @@
+import { GamutMode } from './gamut';
+
 /** IDs of the contrast algorithms built into klar (no plugin required). */
 export const BUILTIN_CONTRAST_TYPES = ['okca', 'deltaE', 'wcag2'] as const;
 export type BuiltinContrastType = (typeof BUILTIN_CONTRAST_TYPES)[number];
@@ -48,6 +50,8 @@ export interface TargetContrastOptions {
   targetContrast: number;
   contrastType: ContrastType;
   tolerance?: number;
+  /** Out-of-gamut handling for the contrast measurement. Defaults to `clip`. */
+  gamut?: GamutMode;
 }
 
 export interface TargetContrastResult {
