@@ -22,7 +22,7 @@ export class ColorMetricsService {
    * `--type` silently changed the gamut policy as well as the algorithm, and
    * both defaults erred in the permissive direction on out-of-gamut input.
    *
-   * @throws GamutNotRepresentableError when `gamut: 'none'` meets an algorithm
+   * @throws AlgorithmDomainError when `gamut: 'none'` meets an algorithm
    * that takes hex. Callers at the CLI boundary turn this into a usage error.
    */
   getContrast(

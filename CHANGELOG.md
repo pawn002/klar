@@ -29,7 +29,7 @@ and the error always running in the permissive direction. All three are fixed.
   configures the mapping, but nothing in the environment can silence the signal —
   a global mute gets set once in CI and never removed.
 
-- **`--gamut` is now `--gamut-map`, and defaults to CSS Color 4 mapping.** klar
+- **New flag `--gamut-map`, defaulting to CSS Color 4 mapping.** klar
   takes no position on what any particular browser does; tracking engines would
   mean maintaining an engine-and-version matrix indefinitely. The spec is a stable
   reference and an implementation is not. `clip` remains available as a
@@ -159,10 +159,10 @@ and the error always running in the permissive direction. All three are fixed.
 
    Colors klar produces (`variants`, `find`, `match`) are in gamut by
    construction and are unaffected.
-2. Expect ~6.5% of OKLCH-authored figures to move by 0.1. Re-baseline recorded
-   values rather than treating the difference as a regression.
-3. Replace `--gamut <mode>` with `--gamut-map <method>`.
-4. If a pipeline branches on `find` failures, switch from parsing `message` to
+2. Expect OKLCH-authored figures to move by exactly 0.1 — 47% of pairings on a
+   real token set. Re-baseline recorded values rather than treating the
+   difference as a regression.
+3. If a pipeline branches on `find` failures, switch from parsing `message` to
    reading `reason`.
 
 ## [2.0.0] - 2026-07-27

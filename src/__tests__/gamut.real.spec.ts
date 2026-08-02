@@ -223,10 +223,12 @@ describe('okca is scored via oklch() at full precision', () => {
   });
 
   describe('parity with the hex route it replaces', () => {
-    // Routing through oklch() removes an 8-bit quantization step. A 4000-pair
-    // random sweep found zero differences at okca's reported precision, so this
-    // is a no-op for in-gamut colors — it closes the gap with the continuous
-    // algorithms without moving any existing number.
+    // Routing through oklch() removes an 8-bit quantization step. These pairs
+    // are hex-authored, so they already sit on the 8-bit grid and the round-trip
+    // is lossless — the parity below is real but does not generalize. In-gamut
+    // *OKLCH-authored* values do move, by exactly 0.1, on 47% of a real token
+    // set. See the CHANGELOG; an earlier draft claimed this was a no-op for all
+    // in-gamut colors, which a synthetic sweep supported and real data did not.
     const PAIRS: Array<[string, string]> = [
       ['#ff746f', '#070e16'],
       ['#3b82f6', '#070e16'],

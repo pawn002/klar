@@ -57,8 +57,9 @@ export type TableData = Array<Array<TableColorCell>>;
  * These describe the *caller's* constraint, not klar's limitation:
  *  - `lightness-exhausted` — desaturation was not permitted, and lightness alone
  *    could not reach the target. A solution may still exist; see `resolvableBy`.
- *  - `chroma-exhausted` — desaturation was permitted and chroma reached 0 at the
- *    reference's lightness without reaching the target.
+ *  - `chroma-exhausted` — desaturation was permitted and no chroma at any
+ *    lightness reached the target. Defensive: below the contrast ceiling the
+ *    achromatic ramp always reaches it, so this should not occur.
  *  - `unreachable` — the target exceeds what *any* color can reach against this
  *    base. Changing the reference color cannot help; the base has to change.
  *

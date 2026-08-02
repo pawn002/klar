@@ -510,6 +510,7 @@ klar find <base-color> <reference-color> [options]
 | `--target <n>` | *(required)* | Target contrast value |
 | `-t, --type <type>` | `okca` | Algorithm: `okca`, `wcag2`, `deltaE` (built-in), plus any installed plugins |
 | `--tolerance <n>` | `0.5` | Acceptable overshoot above the target — the band within which the search stops early. Never accepts a result below the target. |
+| `--allow-desaturation` | off | Permit reducing chroma to reach the target |
 | `--json` | | JSON output |
 | `-q, --quiet` | | Print only the adjusted hex color |
 
@@ -517,38 +518,80 @@ klar find <base-color> <reference-color> [options]
 
 ```jsonc
 {
-  "adjustedColor": "#2563eb",    // string — result hex
+  "adjustedColor": "#2563eb",    // string — result hex, always renderable
   "actualContrast": 4.6,         // number — achieved contrast (of adjustedColor)
   "iterations": 10,              // number — binary search steps
   "success": true,               // boolean — true when actualContrast >= target
-  "message": "",                 // string? — explanation if failed
+  "reason": "ok",                // string — branch on this, never on `message`
+  "axesAdjusted": ["lightness"], // string[] — what moved to reach the target
+  "deltaE": 3,                   // number — perceptual drift from the reference
+  "message": "",                 // string? — human prose; wording is not stable
   "oklch": {                     // object? — OKLCH of adjusted color
     "l": 0.523,
     "c": 0.188,
     "h": 259.8
+  },
+  "gamut": {                     // object — was the reference renderable as given?
+    "outOfGamut": false
   }
 }
 ```
 
-When `success` is `false` the target is unachievable by adjusting lightness
-alone: `adjustedColor` holds the **closest reachable** color, `message` explains
-why, and the command **exits 1** (see [Exit Codes](#exit-codes)).
+**`reason`** is the machine-readable outcome:
 
-> **Known limitation — out-of-gamut reference colors.** `find` adjusts lightness
-> only, at the reference color's authored chroma. When that chroma puts the color
-> outside sRGB at *every* lightness, no candidate is reachable, so `find` returns
-> the input unchanged and exits `1` — even though reducing **chroma** would bring
-> the color into gamut and raise real contrast while holding lightness and hue:
->
-> ```bash
-> klar find "oklch(1 0 0)" "oklch(0.45 0.22 25)" --target 9.5 -q
-> # oklch(0.45 0.22 25)   — exit 1, unchanged
-> ```
->
-> These are exactly the colors that gamut-aware `contrast` now flags, so the two
-> commands disagree on whether a fix exists. Adding a chroma axis is tracked
-> separately; until then, treat a `find` failure on an out-of-gamut reference as
-> "not solvable by lightness", not as "not solvable".
+| Value | Meaning |
+|-------|---------|
+| `ok` | Target met |
+| `lightness-exhausted` | Desaturation was not permitted and lightness alone fell short. A fix exists — see `resolvableBy` |
+| `unreachable` | The target is above the contrast ceiling for this base. No color meets it; the base has to change |
+| `chroma-exhausted` | Defensive: no chroma at any lightness reached a target that should have been reachable |
+
+When `success` is `false` the command **exits 1** (see [Exit Codes](#exit-codes))
+and `adjustedColor` holds the **closest reachable** color — always renderable,
+never the input echoed back. On `lightness-exhausted` the payload also carries
+**`resolvableBy`**: what would solve it, reported *without* being applied.
+
+```jsonc
+{
+  "success": false,
+  "reason": "lightness-exhausted",
+  "adjustedColor": "#a9000b",              // closest reachable, still renderable
+  "actualContrast": 6,
+  "resolvableBy": {
+    "chroma": 0.149,                       // the least saturation sacrifice that works
+    "lightness": 0.365,                    // the lightness it needs
+    "deltaE": 10                           // what it costs, perceptually
+  }
+}
+```
+
+#### Chroma: normalized always, traded never (unless you say so)
+
+Two chroma operations are involved, and only one is optional.
+
+**Gamut normalization is mandatory.** An out-of-gamut reference is chroma-reduced
+onto the gamut boundary before the search begins, because otherwise there is no
+renderable color to return. It is reported under `gamut` and on stderr, never as
+an entry in `axesAdjusted` — it is not something you chose to trade.
+
+**Target-reaching desaturation is off by default.** Once the color is renderable,
+only lightness moves. Trading brand saturation for contrast is a design decision,
+not a computation, so when lightness runs out `find` exits 1 and quotes the fix
+rather than applying it:
+
+```bash
+klar find "oklch(1 0 0)" "oklch(0.45 0.22 25)" --target 9.5
+# → chroma 0.149 at lightness 0.365 would reach the target (10 ΔE from the reference)
+#   Apply with --allow-desaturation, or take it to a human.
+
+klar find "oklch(1 0 0)" "oklch(0.45 0.22 25)" --target 9.5 -q --allow-desaturation
+# #7a0005     exit 0
+```
+
+`--allow-desaturation` runs the identical search, so the quote and the fix cannot
+disagree. The search keeps as much chroma as possible first, then moves lightness
+as little as possible — lightness is free to move because adjusting it is what
+`find` does; the flag grants permission for *chroma*.
 
 **Quiet output:** adjusted hex, e.g. `#2563eb`. On a soft failure the closest
 color is still printed, but the command exits `1` — so `$(klar find … -q)`
