@@ -43,11 +43,23 @@ and the error always running in the permissive direction. All three are fixed.
 
 - **`okca` is scored via `oklch()` at full precision** instead of through an 8-bit
   hex round-trip, closing a disagreement with the continuous algorithms about
-  which color was being measured. **This moves ~6.5% of OKLCH-authored in-gamut
-  figures by exactly 0.1** — never more, and toward accuracy, since the figure now
-  scores the color that was written down rather than its 8-bit rounding. Colors
-  authored as hex are unaffected. It also means `--gamut-map css` reproduces 2.x's
-  *mapping* but not always its *figure*.
+  which color was being measured. **Figures move by exactly 0.1 — never more —
+  and toward accuracy**, since the figure now scores the color that was written
+  down rather than its 8-bit rounding. Colors authored as hex are unaffected.
+
+  *How often* depends on how the tokens were authored, and the range is wide:
+  a synthetic sweep of random OKLCH coordinates moved 6.5%, but a real design
+  system whose values are hand-authored round numbers (`oklch(0.27 0.06 245.34)`)
+  moved **47% of 216 pairings**. Deliberately-chosen OKLCH values essentially
+  never land on the 8-bit sRGB grid, so assume most of your recorded figures
+  shift by 0.1.
+
+  Reassuringly, on that same real token set the shift produced **zero pass/fail
+  verdict changes** against recorded minimum floors. The drift is real but did
+  not cross a threshold.
+
+  It also means `--gamut-map css` reproduces 2.x's *mapping* but not always its
+  *figure*.
 
 - **`find` may now return a color with reduced chroma**, when the reference is not
   displayable as authored — normalization is mandatory, since otherwise there is
@@ -127,9 +139,24 @@ and the error always running in the permissive direction. All three are fixed.
    `--json` and read `gamut.outOfGamut`, then either fix the tokens or pass
    `--allow-out-of-gamut`.
 
+   **Expect this to fire often.** On a real OKLCH-authored design system, 29% of
+   distinct color tokens and 21% of measured pairings were outside sRGB —
+   including subtle ones like `oklch(0.97 0.02 278.14)`, since the gamut narrows
+   to a point at both lightness extremes and low chroma is no protection.
+
    **Under `set -e` this aborts the script at the first such token**, leaving a
    partial result on stdout that reads like a complete short run. Guard the
    assignment: `if OKCA=$(klar contrast "$T" "$BG" -q); then … else … fi`.
+
+   **Node's `execSync` throws on a non-zero exit** in the same way, and the value
+   is stranded in `err.stdout`. If you shell out from JS, catch it:
+
+   ```js
+   let out;
+   try { out = execSync(cmd, { encoding: 'utf8' }); }
+   catch (e) { out = e.stdout; outOfGamut = true; }   // exit 1 still produced a value
+   ```
+
    Colors klar produces (`variants`, `find`, `match`) are in gamut by
    construction and are unaffected.
 2. Expect ~6.5% of OKLCH-authored figures to move by 0.1. Re-baseline recorded
