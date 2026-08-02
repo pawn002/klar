@@ -11,6 +11,7 @@
   "files": [
     "dist",
     "AGENT_PLAYBOOK.md",
+    "CHANGELOG.md",
     "PLUGINS.md",
     "SECURITY.md"
   ],
