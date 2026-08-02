@@ -1,4 +1,4 @@
-import { execFileSync } from 'child_process';
+import { execFileSync, spawnSync } from 'child_process';
 import { existsSync } from 'fs';
 import path from 'path';
 
@@ -33,15 +33,16 @@ function stderrOf(args: string[]): string {
   }
 }
 
-/** Run the CLI and return { code, stdout }. */
-function run(args: string[]): { code: number; stdout: string } {
-  try {
-    const stdout = execFileSync(process.execPath, [CLI, ...args], { stdio: 'pipe' }).toString();
-    return { code: 0, stdout };
-  } catch (err) {
-    const e = err as { status: number; stdout: Buffer };
-    return { code: e.status, stdout: e.stdout?.toString() ?? '' };
-  }
+/**
+ * Run the CLI and return { code, stdout, stderr }.
+ *
+ * `spawnSync` rather than `execFileSync` because stderr has become load-bearing:
+ * out-of-gamut notes go there specifically so `-q` keeps a bare number on
+ * stdout, and `execFileSync` only surfaces stderr on a non-zero exit.
+ */
+function run(args: string[]): { code: number; stdout: string; stderr: string } {
+  const r = spawnSync(process.execPath, [CLI, ...args], { encoding: 'utf8' });
+  return { code: r.status ?? 0, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
 }
 
 const DARK_BG = 'oklch(0.24 0.03 248.99)';
@@ -95,6 +96,56 @@ d('CLI exit-code contract', () => {
       const { code, stdout } = run(['find', NEUTRAL_BG, '#808080', '--target', '21', '--json']);
       expect(code).toBe(1);
       expect(JSON.parse(stdout).success).toBe(false);
+    });
+  });
+
+  // An out-of-gamut input is measured as its mapped equivalent, which is a real
+  // answer to a different question than the one asked. Exit 1 stops it being
+  // adopted silently — the same mechanism that already protects `find`.
+  describe('1 = out-of-gamut input on contrast', () => {
+    const OOG = 'oklch(0.79 0.22 25)';
+    const BG = '#070e16';
+
+    it.each([
+      ['human', ['contrast', OOG, BG]],
+      ['quiet', ['contrast', OOG, BG, '-q']],
+      ['json', ['contrast', OOG, BG, '--json']],
+    ])('%s exits 1', (_label, args) => {
+      expect(exitCode(args as string[])).toBe(1);
+    });
+
+    it('still writes the number to stdout so it can be inspected', () => {
+      const { code, stdout } = run(['contrast', OOG, BG, '-q']);
+      expect(code).toBe(1);
+      expect(Number(stdout.trim())).toBeGreaterThan(0);
+    });
+
+    it('names the offending color on stderr, keeping stdout a bare number', () => {
+      const { stdout, stderr } = run(['contrast', OOG, BG, '-q']);
+      expect(stdout.trim()).toMatch(/^[\d.]+$/);
+      expect(stderr).toContain(OOG);
+      expect(stderr).toMatch(/#[0-9a-f]{6}/i);
+    });
+
+    it('--allow-out-of-gamut waives the failure', () => {
+      expect(exitCode(['contrast', OOG, BG, '-q', '--allow-out-of-gamut'])).toBe(0);
+    });
+
+    it('still reports outOfGamut when the failure is waived', () => {
+      const { stdout } = run(['contrast', OOG, BG, '--json', '--allow-out-of-gamut']);
+      expect(JSON.parse(stdout).gamut.outOfGamut).toBe(true);
+    });
+
+    it('in-gamut colors are unaffected', () => {
+      expect(exitCode(['contrast', '#ffffff', '#000000', '-q'])).toBe(0);
+    });
+
+    it('no mapping mode silences the signal', () => {
+      // Environment can change what klar measures against; nothing in the
+      // environment can turn a mapped measurement into a quiet one.
+      for (const map of ['css', 'clip']) {
+        expect(exitCode(['contrast', OOG, BG, '-q', '--gamut-map', map])).toBe(1);
+      }
     });
   });
 

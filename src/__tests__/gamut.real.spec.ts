@@ -18,44 +18,54 @@ import { getServices } from '../services';
 import { colorSwatch } from '../formatters/human';
 
 /**
- * Reference values sampled from Chrome 150 on sRGB output, cross-checked
- * against canvas `getImageData` and composited-pixel screenshots (issue #9).
- * These pin the behavior that matters: what a display actually paints.
+ * Reference colors and what each mapping method resolves them to. These are
+ * assertions about two well-defined operations — chroma reduction and a channel
+ * clamp — not about any renderer's behavior. klar takes no position on that.
  */
-const PAINTED = [
-  { authored: 'oklch(0.79 0.22 25)', painted: '#ff746f', cssMapped: '#ff938b' },
-  { authored: 'oklch(0.45 0.22 25)', painted: '#b00000', cssMapped: '#a9000b' },
+const MAPPED = [
+  { authored: 'oklch(0.79 0.22 25)', clipped: '#ff746f', cssMapped: '#ff938b' },
+  { authored: 'oklch(0.45 0.22 25)', clipped: '#b00000', cssMapped: '#a9000b' },
 ];
 
 describe('gamut policy', () => {
-  it('defaults to clip — what a display paints', () => {
-    expect(DEFAULT_GAMUT_MODE).toBe('clip');
+  it('defaults to the CSS Color 4 mapping', () => {
+    expect(DEFAULT_GAMUT_MODE).toBe('css');
     expect(GAMUT_MODES).toEqual(['clip', 'css', 'none']);
   });
 
-  describe('clip matches what browsers paint', () => {
-    it.each(PAINTED)('$authored → $painted', ({ authored, painted }) => {
-      expect(clipToSrgb(new Color(authored)).to('srgb').toString({ format: 'hex' })).toBe(painted);
+  describe('clip clamps each channel into range', () => {
+    it.each(MAPPED)('$authored → $clipped', ({ authored, clipped }) => {
+      expect(clipToSrgb(new Color(authored)).to('srgb').toString({ format: 'hex' })).toBe(clipped);
     });
   });
 
-  describe('css mapping is the CSS Color 4 algorithm, and differs from clip', () => {
-    // Guards the trap recorded in issue #9: the spec algorithm is *not* what
-    // browsers do today, so reaching for it produces a different set of wrong
-    // numbers with more authority behind them.
-    it.each(PAINTED)('$authored → $cssMapped, not $painted', ({ authored, cssMapped, painted }) => {
+  describe('css reduces chroma, and is a different operation from clip', () => {
+    // The two must not be conflated: they resolve the same authored color to
+    // different colors, and which one klar used to apply was an accident of
+    // which helper a code path called (issue #9).
+    it.each(MAPPED)('$authored → $cssMapped, not $clipped', ({ authored, cssMapped, clipped }) => {
       const mapped = cssMapToSrgb(new Color(authored)).to('srgb').toString({ format: 'hex' });
       expect(mapped).toBe(cssMapped);
-      expect(mapped).not.toBe(painted);
+      expect(mapped).not.toBe(clipped);
     });
 
-    it('reproduces klar 2.x hex serialization exactly', () => {
-      // `--gamut css` exists to reproduce 2.x figures; a near-miss (the
-      // `oklch.c` method gives #ff928a here) would defeat its only purpose.
-      for (const { authored } of PAINTED) {
+    it('uses the spec algorithm, not plain chroma reduction', () => {
+      // colorjs.io's `oklch.c` method gives #ff928a where the `css` method
+      // gives #ff938b. The latter is what CSS Color 4 specifies and what klar
+      // 2.x produced implicitly via hex serialization.
+      for (const { authored } of MAPPED) {
         const legacy = new Color(authored).to('srgb').toString({ format: 'hex' });
         expect(cssMapToSrgb(new Color(authored)).to('srgb').toString({ format: 'hex' })).toBe(legacy);
       }
+    });
+
+    it('collapses every out-of-gamut chroma onto the same boundary color', () => {
+      // Consequence worth pinning: measured contrast is flat across the whole
+      // out-of-gamut range, so two different authored tokens produce an
+      // identical number and only the out-of-gamut signal separates them.
+      const a = cssMapToSrgb(new Color('oklch(0.79 0.22 25)')).to('srgb').toString({ format: 'hex' });
+      const b = cssMapToSrgb(new Color('oklch(0.79 0.15 25)')).to('srgb').toString({ format: 'hex' });
+      expect(a).toBe(b);
     });
   });
 
@@ -91,7 +101,7 @@ describe('gamut policy', () => {
       }
     });
 
-    it('matches the painted color under clip', () => {
+    it('matches the channel-clamped color under clip', () => {
       expect(toRgb255(new Color('oklch(0.79 0.22 25)'), 'clip')).toEqual([255, 116, 111]);
     });
   });
@@ -118,39 +128,49 @@ describe('contrast is gamut-aware (issue #9)', () => {
   const fg = 'oklch(0.79 0.22 25)';
   const bg = '#070e16';
 
-  it('measures what a display paints, not a color nobody sees', () => {
-    // The regression: 2.x reported 6.1 here — the contrast of #ff938b, which
-    // is neither the authored color nor what Chrome paints. On a pair whose
-    // floor is 4.5 that read as a comfortable pass and renders as a clear fail.
-    const painted = colorMetricsService.getContrast('#ff746f', bg, 'okca');
-    expect(colorMetricsService.getContrast(fg, bg, 'okca')).toBe(painted);
+  it('measures the mapped color, and says which one it measured', () => {
+    // The number describes the color the input resolves to in the gamut, not
+    // the authored coordinates. Scoring the mapped color directly must give the
+    // same answer as measuring it by hand.
+    const mapped = cssMapToSrgb(new Color(fg));
+    const byHand = colorMetricsService.getContrast(
+      `oklch(${numericCoords(mapped, 'oklch').join(' ')})`,
+      bg,
+      'okca',
+    );
+    expect(colorMetricsService.getContrast(fg, bg, 'okca')).toBe(byHand);
   });
 
-  it('does not report the old optimistic figure by default', () => {
-    const now = colorMetricsService.getContrast(fg, bg, 'okca')!;
-    const legacy = colorMetricsService.getContrast(fg, bg, 'okca', 'css')!;
-    expect(now).toBeLessThan(legacy);
-    expect(now).toBeLessThan(4.5);
-    expect(legacy).toBeGreaterThan(4.5);
+  it('is not measuring the authored coordinates', () => {
+    // The distinction the release exists to make visible: an out-of-gamut color
+    // scores differently from the colorimetric value of what was written down,
+    // which is why the case is signalled rather than passed through silently.
+    const mapped = colorMetricsService.getContrast(fg, bg, 'okca')!;
+    const authored = colorMetricsService.getContrast(fg, bg, 'wcag2', 'none')!;
+    const mappedWcag = colorMetricsService.getContrast(fg, bg, 'wcag2')!;
+    expect(mappedWcag).toBeLessThan(authored);
+    expect(mapped).toBeGreaterThan(0);
   });
 
-  it('applies the policy to every algorithm, not just okca', () => {
-    // `--type` used to change the gamut policy as well as the algorithm:
-    // wcag2 and deltaE scored raw unclipped coordinates, with the error running
-    // in the same permissive direction (9.2 reported where the painted color
-    // measures 7.4).
+  it('applies one policy across every algorithm', () => {
+    // `--type` used to change the gamut policy as well as the algorithm: wcag2
+    // and deltaE scored raw unmapped coordinates while okca scored a
+    // chroma-reduced color, with the error running in the permissive direction.
     for (const type of ['wcag2', 'deltaE']) {
-      const clipped = colorMetricsService.getContrast(fg, bg, type, 'clip')!;
+      const dflt = colorMetricsService.getContrast(fg, bg, type)!;
+      const css = colorMetricsService.getContrast(fg, bg, type, 'css')!;
       const authored = colorMetricsService.getContrast(fg, bg, type, 'none')!;
-      const painted = colorMetricsService.getContrast('#ff746f', bg, type)!;
 
-      expect(colorMetricsService.getContrast(fg, bg, type)).toBe(clipped);
-      expect(clipped).toBeLessThan(authored);
-      // `clip` is a gamut operation only — it clamps channels but keeps float
-      // precision, while `#ff746f` has been quantized to 8 bits. They agree to
-      // within that rounding, which is the whole remaining gap.
-      expect(clipped).toBeCloseTo(painted, 0);
+      expect(dflt).toBe(css);
+      expect(css).toBeLessThan(authored);
     }
+  });
+
+  it('reports the same figure for every chroma above the gamut boundary', () => {
+    // Two distinct authored tokens, one number. Only `outOfGamut` separates them.
+    expect(colorMetricsService.getContrast('oklch(0.79 0.22 25)', bg, 'okca')).toBe(
+      colorMetricsService.getContrast('oklch(0.79 0.15 25)', bg, 'okca'),
+    );
   });
 
   it('keeps in-gamut results identical across modes', () => {
@@ -173,8 +193,8 @@ describe('contrast is gamut-aware (issue #9)', () => {
   it('renders the swatch for the color it measured', () => {
     // A single line of output must not show one color and report a number
     // computed on another.
-    expect(colorSwatch(fg, 'clip')).toContain('\x1b[38;2;255;116;111m');
     expect(colorSwatch(fg, 'css')).toContain('\x1b[38;2;255;147;139m');
+    expect(colorSwatch(fg, 'clip')).toContain('\x1b[38;2;255;116;111m');
   });
 });
 

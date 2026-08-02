@@ -4,41 +4,53 @@ import { ContrastType } from '../services/types';
 import {
   GAMUT_MODES,
   GAMUT_MODE_HELP,
+  GAMUT_MODE_ENV_VAR,
   GamutMode,
-  DEFAULT_GAMUT_MODE,
+  defaultGamutMode,
   AlgorithmDomainError,
   describeGamut,
 } from '../services/gamut';
-import { output, errorOut, OutputOptions } from '../utils/output';
+import { output, errorOut, markFailure, OutputOptions } from '../utils/output';
 import { formatContrast } from '../formatters/human';
 import { PLUGIN_DOCS_URL } from '../constants';
 
 export function contrastCommand(): Command {
   const cmd = new Command('contrast')
-    .description('Calculate contrast between a foreground and a background, as an sRGB display paints it. OKCA is polarity-aware — argument order matters (some plugins are too).')
+    .description('Calculate contrast between a foreground and a background. OKCA is polarity-aware — argument order matters (some plugins are too).')
     .argument('<foreground>', 'Foreground color (hex, rgb, oklch)')
     .argument('<background>', 'Background color (hex, rgb, oklch)')
     .option('-t, --type <type>', 'Algorithm: okca, wcag2, deltaE (built-in), plus any installed contrast-algorithm plugins', 'okca')
-    .option('-g, --gamut <mode>', GAMUT_MODE_HELP, DEFAULT_GAMUT_MODE)
+    .option('--gamut-map <method>', GAMUT_MODE_HELP, defaultGamutMode())
+    .option('--allow-out-of-gamut', 'Exit 0 instead of 1 when an input is outside the gamut', false)
     .option('--json', 'Output as JSON', false)
     .option('-q, --quiet', 'Print only the numeric value', false)
     .addHelpText('after', `
 Out-of-gamut colors:
-  A color authored in OKLCH may sit outside sRGB. klar measures what an sRGB
-  display actually paints, because a contrast figure for a color that cannot
-  be displayed is not an accessibility measurement. --json reports
-  gamut.outOfGamut and the measured value so consumers can detect the case.
-  On a wider-gamut display the color clips less and real contrast is higher;
-  sRGB is the conservative floor.
+  A color authored in OKLCH can sit outside sRGB. It has to be resolved to a
+  displayable color before it can be measured, so the reported number describes
+  that mapped equivalent — not the color in your token file. That is a real
+  answer to a different question, so it exits 1 rather than passing silently.
+  Pass --allow-out-of-gamut to accept it, or read gamut.outOfGamut from --json.
+
+  Reducing chroma is the fix, but the number will not move until the color is
+  actually in gamut: chroma reduction maps every out-of-gamut chroma at a given
+  lightness and hue onto the same boundary color.
+
+  ${GAMUT_MODE_ENV_VAR} sets the default mapping process-wide. No environment
+  variable waives the failure — that decision belongs at the call site.
 
 Examples:
   $ klar contrast "#fff" "#000"
   $ klar contrast "#fff" "#000" --type wcag2
   $ klar contrast "oklch(50% 0.2 240)" "#000" -q
   $ klar contrast "oklch(0.79 0.22 25)" "#070e16" --json
-  $ klar contrast "oklch(0.79 0.22 25)" "#070e16" --gamut css
+  $ klar contrast "oklch(0.79 0.22 25)" "#070e16" --allow-out-of-gamut -q
   $ klar contrast "#fff" "#000" --type okca --json`)
-    .action(async (color1: string, color2: string, opts: { type: string; gamut: string; json: boolean; quiet: boolean }) => {
+    .action(async (
+      color1: string,
+      color2: string,
+      opts: { type: string; gamutMap: string; allowOutOfGamut: boolean; json: boolean; quiet: boolean },
+    ) => {
       const { pluginRegistry } = getServices();
       const validTypes: string[] = ['okca', 'wcag2', 'deltaE', ...pluginRegistry.ids()];
       if (!validTypes.includes(opts.type)) {
@@ -49,12 +61,13 @@ Examples:
         );
       }
       const contrastType: ContrastType = opts.type;
-      if (!(GAMUT_MODES as readonly string[]).includes(opts.gamut)) {
+
+      if (!(GAMUT_MODES as readonly string[]).includes(opts.gamutMap)) {
         errorOut(
-          `Unknown gamut mode "${opts.gamut}".\nAvailable modes: ${GAMUT_MODES.join(', ')}`,
+          `Unknown gamut mapping "${opts.gamutMap}".\nAvailable: ${GAMUT_MODES.join(', ')}`,
         );
       }
-      const gamut = opts.gamut as GamutMode;
+      const gamut = opts.gamutMap as GamutMode;
       const outputOpts: OutputOptions = { json: opts.json, quiet: opts.quiet };
 
       const { colorMetricsService, colorUtilService } = getServices();
@@ -67,16 +80,30 @@ Examples:
       try {
         contrast = colorMetricsService.getContrast(color1, color2, contrastType, gamut);
       } catch (err) {
-        // `--gamut none` against an algorithm that takes hex. Refusing beats
-        // silently measuring a different color — the failure this command was
-        // fixed for.
-        if (err instanceof AlgorithmDomainError) errorOut(err.message);
+        // Refusing beats measuring something else and not saying so. The service
+        // carries the facts; the flag names belong here.
+        if (err instanceof AlgorithmDomainError) {
+          errorOut(
+            `--gamut-map none cannot be used with --type ${contrastType}.\n` +
+              `${err.message}\n` +
+              `Use --gamut-map css or clip, or --type wcag2 / deltaE, which are ` +
+              `defined continuously.`,
+          );
+        }
         throw err;
       }
       if (contrast === null) errorOut('Unable to calculate contrast for the given colors');
 
-      const gamutOne = describeGamut(parsedOne!, gamut);
-      const gamutTwo = describeGamut(parsedTwo!, gamut);
+      const one = describeGamut(parsedOne!, gamut);
+      const two = describeGamut(parsedTwo!, gamut);
+      const outOfGamut = one.outOfGamut || two.outOfGamut;
+
+      // Only the colors that were actually mapped are listed. In gamut — the
+      // common case — this is three lines, and `outOfGamut: false` still states
+      // the fact explicitly rather than leaving it to be inferred from absence.
+      const measured: Record<string, string> = {};
+      if (one.outOfGamut) measured.colorOne = one.measured;
+      if (two.outOfGamut) measured.colorTwo = two.measured;
 
       const plugin = pluginRegistry.get(contrastType);
       const data = {
@@ -86,16 +113,24 @@ Examples:
         colorTwo: color2,
         unit: plugin?.unit,
         category: plugin?.category,
-        gamut: {
-          mode: gamut,
-          outOfGamut: gamutOne.outOfGamut || gamutTwo.outOfGamut,
-          colorOne: gamutOne,
-          colorTwo: gamutTwo,
-        },
+        gamut: { map: gamut, outOfGamut, ...(outOfGamut ? { measured } : {}) },
       };
+
       if (opts.quiet) output({ quietValue: contrast }, outputOpts);
       else if (opts.json) output(data, outputOpts);
       else output(formatContrast(data), outputOpts);
+
+      if (outOfGamut) {
+        // stderr, so `-q` stays composable: the exit code says a color was
+        // mapped, this says which one and what it became, and stdout stays a
+        // bare number for `$( )`.
+        const which = [
+          one.outOfGamut ? `${color1} → ${one.measured}` : null,
+          two.outOfGamut ? `${color2} → ${two.measured}` : null,
+        ].filter(Boolean);
+        process.stderr.write(`klar: outside sRGB, measured as ${which.join(', ')}\n`);
+        if (!opts.allowOutOfGamut) markFailure();
+      }
     });
 
   return cmd;

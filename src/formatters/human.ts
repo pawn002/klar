@@ -50,15 +50,14 @@ export function formatContrast(data: {
   unit?: string;
   category?: string;
   gamut?: {
-    mode: GamutMode;
+    map: GamutMode;
     outOfGamut: boolean;
-    colorOne: { outOfGamut: boolean; measured: string };
-    colorTwo: { outOfGamut: boolean; measured: string };
+    measured?: { colorOne?: string; colorTwo?: string };
   };
 }): string {
   const label = data.category === 'dimension' ? 'Min Dimension' : 'Contrast';
   const value = data.unit ? `${data.contrast} ${data.unit}` : `${data.contrast}`;
-  const mode = data.gamut?.mode ?? DEFAULT_GAMUT_MODE;
+  const mode = data.gamut?.map ?? DEFAULT_GAMUT_MODE;
   const lines = [
     `${label} (${data.type.toUpperCase()}): ${value}`,
     `  ${colorSwatch(data.colorOne, mode)} ${data.colorOne} → ${colorSwatch(data.colorTwo, mode)} ${data.colorTwo}`,
@@ -68,19 +67,13 @@ export function formatContrast(data: {
   // the color the user typed. Say so on the spot: silence here reads as "this
   // color is fine", and the error always runs in the permissive direction.
   if (data.gamut?.outOfGamut) {
-    const outside: string[] = [];
-    if (data.gamut.colorOne.outOfGamut) {
-      outside.push(`foreground → ${data.gamut.colorOne.measured}`);
-    }
-    if (data.gamut.colorTwo.outOfGamut) {
-      outside.push(`background → ${data.gamut.colorTwo.measured}`);
-    }
-    lines.push(
-      `  ! outside sRGB, measured as ${mode === 'clip' ? 'painted' : mode}: ${outside.join(', ')}`,
-    );
-    if (mode !== 'none') {
-      lines.push(`    On a wider-gamut display the color clips less and real contrast is higher.`);
-    }
+    const outside = [
+      data.gamut.measured?.colorOne ? `foreground → ${data.gamut.measured.colorOne}` : null,
+      data.gamut.measured?.colorTwo ? `background → ${data.gamut.measured.colorTwo}` : null,
+    ].filter(Boolean);
+    lines.push(`  ! outside sRGB; measured as ${outside.join(', ')}`);
+    lines.push(`    Reduce chroma until the color is in gamut — the number will not`);
+    lines.push(`    move before then, since every chroma above the boundary maps here.`);
   }
 
   return lines.join('\n');

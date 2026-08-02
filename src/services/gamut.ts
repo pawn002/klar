@@ -19,48 +19,67 @@
  * So a single line of `klar contrast` output rendered one color and reported a
  * number computed on a different one, and neither the caller nor the docs said
  * which was which. Worse, the value being measured (`#ff938b`) was nobody's
- * intent: not the authored color, and not what a browser paints.
+ * intent — it fell out of a serialization call.
  *
  * Every conversion now routes through this module, and the policy is an
  * explicit, user-visible parameter rather than an accident of which helper a
  * code path happened to call.
  *
- * On `clip` being the default
+ * On `css` being the default
+ * --------------------------
+ * CSS Color 4 gamut mapping — chroma reduction until the color fits — is the
+ * standard answer to "what is this color, in this gamut", and it is the same
+ * operation everywhere klar maps a color, whether measuring or producing.
+ *
+ * klar deliberately takes **no position on what any particular browser does**.
+ * Engines vary and change; tracking them would mean maintaining a matrix of
+ * engines and versions indefinitely, and re-verifying it forever. The spec is a
+ * stable reference and an implementation is not, so klar targets the spec and
+ * leaves rendering behavior to renderers.
+ *
+ * `clip` remains available as a well-defined operation — clamp each channel
+ * into range — for callers who specifically want it. It is described as what it
+ * is, with no claim about who performs it.
+ *
+ * A consequence worth knowing
  * ---------------------------
- * Browsers today clip per channel: Chrome paints `oklch(0.45 0.22 25)` as
- * R176/G0/B0, not the CSS Color 4 chroma-reduced `#a9000b`. Since klar is an
- * accessibility tool, the number should describe what a user's screen receives,
- * so `clip` is the default.
- *
- * This is a statement about current browser behavior, not about the spec.
- * CSS Color 4 specifies chroma reduction and engines are expected to move
- * toward it; when they do, `css` becomes the accurate answer and this default
- * should be revisited. That is why the modes are named for the question they
- * answer rather than for their vintage.
- *
- * Note also that "as painted" is only one number for one output space. On a
- * P3 display the color clips less and real contrast is better. sRGB is the
- * conservative case, and the right one to hold an accessibility floor against.
- *
- * One residual gap, deliberately left
- * -----------------------------------
- * `clip` is a gamut operation only: it clamps channels into range but keeps
- * float precision. Algorithms that take hex (OKCA and every plugin) additionally
- * quantize to 8 bits, so they can differ from the continuous-space algorithms by
- * a rounding step. Quantizing here would close that, but it would also change
- * results for colors that were never out of gamut, which is a wider change than
- * this policy needs to make. The residual is ~0.1; the defect it replaces was 2.1.
+ * Chroma reduction maps *every* out-of-gamut chroma at a given lightness and hue
+ * onto the same boundary color. `oklch(0.79 0.22 25)` and `oklch(0.79 0.15 25)`
+ * both become `#ff938b`. Measured contrast is therefore flat across the whole
+ * out-of-gamut range and only starts moving once the color is inside it, so two
+ * genuinely different authored tokens can produce an identical number. The
+ * out-of-gamut signal is the only thing distinguishing them, which is why it is
+ * reported in every mode and cannot be traded away for output size.
  */
 import Color from 'colorjs.io';
 
 export const GAMUT_MODES = ['clip', 'css', 'none'] as const;
 export type GamutMode = (typeof GAMUT_MODES)[number];
 
-/** What a display actually paints today. See the note above before changing. */
-export const DEFAULT_GAMUT_MODE: GamutMode = 'clip';
+/** The CSS Color 4 standard mapping. See the note above before changing. */
+export const DEFAULT_GAMUT_MODE: GamutMode = 'css';
+
+/** Environment override for the default. Config only — it cannot silence a signal. */
+export const GAMUT_MODE_ENV_VAR = 'KLAR_GAMUT_MAP';
 
 export const GAMUT_MODE_HELP =
-  'Out-of-gamut handling: clip (as browsers paint today), css (CSS Color 4 chroma reduction), none (measure the authored color; unavailable for algorithms that take hex)';
+  'Out-of-gamut resolution: css (CSS Color 4 chroma reduction), clip (clamp each channel into range), none (measure the authored color; unavailable for algorithms whose domain it exceeds)';
+
+/**
+ * Resolve the default mapping mode, honoring `KLAR_GAMUT_MAP`.
+ *
+ * Configuration is global because a project should measure against one policy.
+ * Waiving a *failure* is not configuration and has no environment variable —
+ * see `--allow-out-of-gamut`. An env var that mutes a signal gets set once in
+ * CI and never removed, which reinstates the failure mode this module exists to
+ * eliminate.
+ */
+export function defaultGamutMode(env: NodeJS.ProcessEnv = process.env): GamutMode {
+  const fromEnv = env[GAMUT_MODE_ENV_VAR];
+  return fromEnv && (GAMUT_MODES as readonly string[]).includes(fromEnv)
+    ? (fromEnv as GamutMode)
+    : DEFAULT_GAMUT_MODE;
+}
 
 /**
  * Raised when a request falls outside the domain where an algorithm's result is

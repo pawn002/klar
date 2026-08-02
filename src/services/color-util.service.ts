@@ -37,7 +37,7 @@ export class ColorUtilService {
     const originalHue = oklchColor.coords[2];
 
     const targetColor = new Color('oklch', [lightness, originalChroma, originalHue]);
-    const inGamut = targetColor.toGamut({ space: 'srgb', method: 'oklch.c' });
+    const inGamut = targetColor.toGamut({ space: 'srgb', method: 'css' });
     return inGamut.to('srgb').toString({ format: 'hex' });
   }
 
@@ -103,11 +103,11 @@ export class ColorUtilService {
 
     const targetChroma = rand(0.11, 0.34);
     const colorOne = new Color('oklch', [rand(0.25, 0.26), targetChroma, rand(0, 360)])
-      .toGamut({ space: 'srgb', method: 'oklch.c' })
+      .toGamut({ space: 'srgb', method: 'css' })
       .to('srgb')
       .toString({ format: 'hex' });
     const colorTwo = new Color('oklch', [rand(0.94, 0.95), targetChroma, rand(0, 360)])
-      .toGamut({ space: 'srgb', method: 'oklch.c' })
+      .toGamut({ space: 'srgb', method: 'css' })
       .to('srgb')
       .toString({ format: 'hex' });
 
