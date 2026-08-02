@@ -792,6 +792,26 @@ The one exception to "stdout carries the payload" is `lightness` with `-q` when
 no range exists — there are no numbers to print, and printing a pair would be
 the defect this replaced. The exit code and stderr carry it.
 
+### `set -e` and out-of-gamut input
+
+Under `set -e`, a bare assignment aborts the script the first time `contrast`
+meets an out-of-gamut color — leaving a *partial* result on stdout that reads
+like a complete short run. Guard the assignment when auditing colors you
+supply:
+
+```bash
+for T in "${TOKENS[@]}"; do
+  if OKCA=$(klar contrast "$T" "$BG" -q); then
+    echo "$T -> $OKCA"
+  else
+    echo "$T -> $OKCA  (outside sRGB — figure describes the mapped color)"
+  fi
+done
+```
+
+Colors klar *produces* — `variants` cells, `find` results, `match` output — are
+in gamut by construction and never trigger this.
+
 ---
 
 ## Architecture

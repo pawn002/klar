@@ -126,6 +126,12 @@ and the error always running in the permissive direction. All three are fixed.
 1. `contrast` on OKLCH-authored tokens may now exit `1`. Audit with
    `--json` and read `gamut.outOfGamut`, then either fix the tokens or pass
    `--allow-out-of-gamut`.
+
+   **Under `set -e` this aborts the script at the first such token**, leaving a
+   partial result on stdout that reads like a complete short run. Guard the
+   assignment: `if OKCA=$(klar contrast "$T" "$BG" -q); then … else … fi`.
+   Colors klar produces (`variants`, `find`, `match`) are in gamut by
+   construction and are unaffected.
 2. Expect ~6.5% of OKLCH-authored figures to move by 0.1. Re-baseline recorded
    values rather than treating the difference as a regression.
 3. Replace `--gamut <mode>` with `--gamut-map <method>`.

@@ -65,6 +65,30 @@ the color in the token file. `contrast` **exits 1** to say so.
 OKCA=$(klar contrast "$FG" "$BG" -q) || echo "$FG is outside sRGB"
 ```
 
+**Guard the assignment when auditing authored tokens.** Under `set -e` —
+normal in CI — a bare `OKCA=$(klar contrast ...)` aborts the script at
+the first out-of-gamut token, leaving a partial audit on stdout that
+reads like a short token set rather than a truncated run:
+
+```bash
+for T in "${TOKENS[@]}"; do
+  if OKCA=$(klar contrast "$T" "$BG" -q); then
+    echo "  $T -> $OKCA"
+  else
+    echo "  $T -> $OKCA  (outside sRGB — figure describes the mapped color)"
+  fi
+done
+```
+
+The guarded form is better output regardless: it separates "measured
+cleanly" from "measured a mapped equivalent" inline, which a bare number
+cannot.
+
+This only applies to colors *you* supply. Colors klar produces —
+`variants` cells, `find` results, `match` output — are in gamut by
+construction and never trigger it, so the loops later in this playbook
+need no guard.
+
 Two things follow when auditing tokens authored in OKLCH:
 
 - **Reducing chroma will not move the number until the color is in
