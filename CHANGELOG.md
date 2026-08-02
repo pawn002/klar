@@ -8,68 +8,129 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `@pawn002/klar-plugin-interface` and `@pawn002/klar-plugin-registry` are versioned
 independently from `klar-cli`; entries below note when they move.
 
-## [3.0.0] - 2026-08-01
+## [3.0.0] - 2026-08-02
+
+Issue [#9] reported that `contrast` overstated out-of-gamut colors. It turned out
+to be one of three instances of the same pattern — a plausible value, no signal,
+and the error always running in the permissive direction. All three are fixed.
 
 ### Breaking
 
-- **`contrast` now measures colors as an sRGB display paints them** ([#9]). A color
-  authored in OKLCH can sit outside the sRGB gamut; the browser paints something
-  else, and the contrast a user experiences is lower. klar reported the higher
-  figure with nothing in the output to signal it, so an out-of-gamut token could
-  read as a comfortable pass and render as a clear fail —
-  `contrast "oklch(0.79 0.22 25)" "#070e16"` returned `6.1` where the painted color
-  measures `4.0`, against a `4.5` floor. **Every figure recorded for an
-  out-of-gamut color changes, always downward. In-gamut colors are unaffected.**
-  Re-validate any tokens authored in OKLCH. Pass `--gamut css` to reproduce a 2.x
-  figure exactly.
+- **An out-of-gamut input now exits `1` on `contrast`** ([#9]). A color outside
+  sRGB has to be resolved to a displayable one before it can be measured, so the
+  number describes that mapped equivalent, not the color in your token file. That
+  is a real answer to a different question, so the exit code stops it being
+  adopted silently while stdout keeps the value for inspection. Waive per call
+  with `--allow-out-of-gamut`. **This is the largest migration item**: an existing
+  script measuring OKLCH tokens gets `1` where it got `0`, and under `set -e` that
+  aborts rather than degrades.
 
-  The old number was not the colorimetric value of the authored color either. It
-  came from hex serialization silently applying CSS Color 4 gamut mapping, so
-  `oklch(0.79 0.22 25)` was scored as `#ff938b` — neither what was authored nor
-  what any display paints.
+  There is deliberately no environment variable for the waiver. `KLAR_GAMUT_MAP`
+  configures the mapping, but nothing in the environment can silence the signal —
+  a global mute gets set once in CI and never removed.
+
+- **`--gamut` is now `--gamut-map`, and defaults to CSS Color 4 mapping.** klar
+  takes no position on what any particular browser does; tracking engines would
+  mean maintaining an engine-and-version matrix indefinitely. The spec is a stable
+  reference and an implementation is not. `clip` remains available as a
+  well-defined channel clamp. No `--gamut <space>` flag ships, so `--gamut p3`
+  stays purely additive whenever wide-gamut work lands ([#10]).
 
 - **`--type` no longer changes the gamut policy.** `wcag2` and `deltaE` scored raw
-  unclipped coordinates while `okca` and plugins scored a chroma-reduced color. The
-  policy is now applied once at the input boundary, so all algorithms agree on what
-  color they are measuring. `wcag2` on the pair above moves `9.2` → `7.4`.
+  unmapped coordinates while `okca` scored a chroma-reduced color, so the
+  algorithm silently determined the policy as well. It is now applied once at the
+  input boundary. `wcag2` on an out-of-gamut pair moves `9.2` → `7.4`.
+
+- **`okca` is scored via `oklch()` at full precision** instead of through an 8-bit
+  hex round-trip, closing a disagreement with the continuous algorithms about
+  which color was being measured. **This moves ~6.5% of OKLCH-authored in-gamut
+  figures by exactly 0.1** — never more, and toward accuracy, since the figure now
+  scores the color that was written down rather than its 8-bit rounding. Colors
+  authored as hex are unaffected. It also means `--gamut-map css` reproduces 2.x's
+  *mapping* but not always its *figure*.
+
+- **`find` may now return a color with reduced chroma**, when the reference is not
+  displayable as authored — normalization is mandatory, since otherwise there is
+  no renderable color to return. Read `axesAdjusted` and `gamut` to see what
+  moved. Targets that previously failed may now succeed.
+
+- **`lightness` exits `1` with `null` bounds** when the color's chroma is not
+  renderable at any lightness.
+
+- **Removed** `ColorUtilService.getRgb255Array` and
+  `ColorMetricsService.calculateOKCA`, both unreferenced.
 
 ### Added
 
-- **`-g, --gamut <mode>` on `contrast`** — `clip` (default; what browsers paint),
-  `css` (CSS Color 4 chroma reduction, reproducing klar 2.x), or `none` (the
-  authored color, unmapped). `none` is rejected with exit `2` for algorithms that
-  take hex (`okca`, plugins) rather than silently substituting a mapped color.
-- **`gamut` object in `contrast --json`** — carries `mode`, a top-level
-  `outOfGamut` boolean, and per-color `outOfGamut` plus the `measured` value the
-  figure was computed on. `-q` is a bare number with no room for a caveat, so this
-  is how scripts detect the case.
-- Human-readable output notes when an input is outside sRGB, shows the color it
-  measured, and points out that a wider-gamut display clips less.
+- `--allow-out-of-gamut` on `contrast`, and `--allow-desaturation` on `find`.
+- `KLAR_GAMUT_MAP` environment variable, matching the existing `KLAR_PLUGINS` /
+  `KLAR_NO_PLUGINS` convention. Useful for pinning behavior during migration.
+- **`reason` on `find`** — a machine-readable enum (`ok`, `lightness-exhausted`,
+  `unreachable`, `chroma-exhausted`) so nothing has to parse prose. `message`
+  remains human-readable and its wording is not stable. `unreachable` is decided
+  against the contrast ceiling for the base color, making it a claim about colors
+  rather than about klar's effort.
+- **`resolvableBy` on `find`** — when lightness alone falls short, the chroma and
+  lightness that *would* reach the target, and the ΔE it costs, reported without
+  being applied. Trading brand saturation for contrast is a design decision, and
+  an agent accepting a desaturated brand color silently produces drift no single
+  call reveals. `--allow-desaturation` records that a human has made the call.
+- `axesAdjusted` and `deltaE` on `find`. Gamut normalization is never listed as an
+  adjusted axis — it is reported under `gamut`, and it was not something the
+  caller chose to trade.
+- `gamut` object in `contrast`, `find` and `lightness` `--json` output.
+- Out-of-gamut notes on **stderr** for `contrast`, `find` and `variants`, so `-q`
+  keeps a bare, composable value on stdout.
 
 ### Fixed
 
-- **The contrast swatch and the contrast number disagreed.** A single line of
-  `klar contrast` output rendered one color (`#ff746f`, per-channel clipped) and
-  reported a number computed on another (`#ff938b`, chroma-reduced). klar had two
-  unrelated gamut conversions; the correct one existed only incidentally, as
-  escape-sequence range-guarding in the ANSI swatch. Both now route through a
-  single documented policy in `services/gamut.ts`.
-- `ColorUtilService.getRgb255Array` rounded raw sRGB coordinates with no clamp, so
-  an out-of-gamut color produced values outside 0–255.
+- **The contrast swatch and the contrast number disagreed.** One line of
+  `klar contrast` output rendered one color and reported a number computed on
+  another. klar had two unrelated gamut conversions; the correct-looking one
+  existed only incidentally, as escape-sequence range-guarding in the ANSI swatch.
+- **`find` could return the reference color unchanged and unrenderable.** When the
+  authored chroma was out of gamut at every lightness, no candidate passed the
+  gamut check, the fallback meant to prevent exactly this stayed null, and the
+  input came back marked as the closest result. Normalization now runs first, so
+  the failure is structurally impossible.
+- **`find` could report a target unreachable that the reference already met.** The
+  lightness bisection could converge without ever evaluating the reference's own
+  lightness, which for a saturated hue is often the only place its chroma renders.
+- **`lightness` invented a range when none existed.** `oklch(0.5 0.9 25)` renders
+  at no lightness, but the command returned `{lightMin: 0.5, lightMax: 0.5}` — "the
+  usable range is exactly 0.5" — at exit 0.
+- **Achromatic colors returned `null` from okca** on the new `oklch()` path, since
+  grays convert to a `NaN` hue and a chroma that serializes to exponent notation.
+  Every neutral in a design system would have hit it.
+- **Coordinates could be boxed `Number` objects.** colorjs.io returns them for
+  bare-number CSS coordinates, and they defeat `Number.isFinite` and strict
+  equality while behaving normally under arithmetic and `JSON.stringify`.
+  Normalized at the boundary via `numericCoords`.
+- `AlgorithmDomainError` replaces `GamutNotRepresentableError`. The old message
+  claimed hex cannot represent an out-of-gamut color, which is false — okca
+  accepts `oklch()`. The real limit is that okca's guarantee is established across
+  the sRGB gamut.
 
 ### Changed
 
-- Test suite split into two jest projects. Most specs run against the simplified
-  `colorjs.io` mock, whose color math is approximate — which is why no existing
-  test could have caught this defect. Specs named `*.real.spec.ts` resolve the real
-  library and pin concrete values against what a browser paints.
+- Test suite split into two jest projects. Most specs run against a simplified
+  `colorjs.io` mock whose color math is approximate — which is why no existing
+  test could have caught any of this. Specs named `*.real.spec.ts` resolve the
+  real library and pin concrete values.
+- Colors klar *produces* (`find`, `match`, `pair`, `createSrgbColor`) now use the
+  CSS Color 4 mapping rather than plain `oklch.c`, so one algorithm applies
+  everywhere klar maps a color.
 
-### Known issues
+### Migration
 
-- `find` still adjusts lightness only, so it reports "unachievable" and exits `1`
-  on out-of-gamut colors that reducing **chroma** would fix — exactly the colors
-  gamut-aware `contrast` now flags. Documented in the README and the agent
-  playbook; a chroma axis is tracked separately.
+1. `contrast` on OKLCH-authored tokens may now exit `1`. Audit with
+   `--json` and read `gamut.outOfGamut`, then either fix the tokens or pass
+   `--allow-out-of-gamut`.
+2. Expect ~6.5% of OKLCH-authored figures to move by 0.1. Re-baseline recorded
+   values rather than treating the difference as a regression.
+3. Replace `--gamut <mode>` with `--gamut-map <method>`.
+4. If a pipeline branches on `find` failures, switch from parsing `message` to
+   reading `reason`.
 
 ## [2.0.0] - 2026-07-27
 
@@ -170,3 +231,4 @@ Initial release.
 [1.0.0]: https://github.com/pawn002/klar/releases/tag/v1.0.0
 [#2]: https://github.com/pawn002/klar/pull/2
 [#9]: https://github.com/pawn002/klar/issues/9
+[#10]: https://github.com/pawn002/klar/issues/10

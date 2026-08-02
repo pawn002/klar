@@ -136,12 +136,12 @@ export function numericCoords(color: Color, space: string): [number, number, num
 }
 
 /**
- * Per-channel clamp of gamma-encoded sRGB coordinates — what browsers paint.
+ * Per-channel clamp of gamma-encoded sRGB coordinates.
  *
- * Deliberate policy, not incidental range-guarding: do not "tidy" this into
- * colorjs.io's `toGamut`, which implements chroma reduction and yields
- * different colors (it agrees with Chrome on well under half of out-of-gamut
- * samples). See `gamut.spec.ts`, which pins the specific values.
+ * A distinct operation from `cssMapToSrgb`, not an implementation detail of it:
+ * the two resolve the same authored color to different colors, and conflating
+ * them is what produced issue #9. Do not "tidy" this into colorjs.io's
+ * `toGamut`. `gamut.real.spec.ts` pins the specific values.
  */
 export function clipToSrgb(color: Color): Color {
   const coords = color.to('srgb').coords.map((c) => Math.min(1, Math.max(0, c)));
@@ -152,11 +152,15 @@ export function clipToSrgb(color: Color): Color {
  * CSS Color 4 gamut mapping: reduce chroma in OKLCH until the color fits.
  *
  * Must stay on colorjs.io's `css` method, not `oklch.c`. The `css` method is
- * the spec algorithm (chroma reduction with local clipping against deltaE),
- * and it is what klar 2.x produced implicitly via hex serialization —
- * `#ff938b` for `oklch(0.79 0.22 25)`, where plain `oklch.c` gives `#ff928a`.
- * This mode exists so 2.x figures can be reproduced exactly, so a near-miss
- * would defeat its only purpose.
+ * the spec algorithm (chroma reduction with local clipping against deltaE), and
+ * it is what klar 2.x produced implicitly via hex serialization — `#ff938b` for
+ * `oklch(0.79 0.22 25)`, where plain `oklch.c` gives `#ff928a`.
+ *
+ * Note this reproduces 2.x's *mapping*, not always its *figure*. okca is now
+ * scored at full precision rather than through an 8-bit hex round-trip, so the
+ * same mapped color can score slightly differently — 6 where 2.x reported 6.1 on
+ * the pair above. Quantizing here to stay bug-compatible would reintroduce, for
+ * this mode alone, the defect that change removed.
  */
 export function cssMapToSrgb(color: Color): Color {
   return color.to('srgb').toGamut({ space: 'srgb', method: 'css' });

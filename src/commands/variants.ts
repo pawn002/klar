@@ -49,7 +49,22 @@ error. Prefer adaptive mode unless you need fixed dimensions.
         || space === 'hsl';
 
       const { colorUtilService } = getServices();
-      if (!colorUtilService.parseColor(color)) errorOut(`Invalid color: ${color}`);
+      const parsed = colorUtilService.parseColor(color);
+      if (!parsed) errorOut(`Invalid color: ${color}`);
+
+      // An out-of-gamut base means the grid is not centered where the caller
+      // thinks: adaptive mode walks chroma down until it finds renderable cells,
+      // so a base at chroma 0.4 can silently produce a grid starting near 0.035.
+      // Reported on stderr rather than in the payload, because the payload is a
+      // bare array and this command's own documented `jq '.[][]'` recipes would
+      // break if it were wrapped — and every cell in it is in gamut regardless.
+      // Not a failure: producing a grid is still the right answer.
+      if (!parsed!.inGamut('srgb')) {
+        process.stderr.write(
+          `klar: ${color} is outside sRGB; the grid is built from the chroma range ` +
+            `that renders, not the one requested\n`,
+        );
+      }
 
       if (useFixedSteps) {
         const lightSteps = opts.lightSteps ?? 10;
