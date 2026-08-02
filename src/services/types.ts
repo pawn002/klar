@@ -21,8 +21,15 @@ export class ChromaMatchObject {
 
 export interface MinMaxLightObject {
   originalCoords: ColorCoordArray;
-  lightMin: number;
-  lightMax: number;
+  /**
+   * Bounds of the in-gamut lightness range at this color's chroma and hue,
+   * or `null` when the chroma puts the color outside the gamut at *every*
+   * lightness — i.e. there is no usable range at all.
+   */
+  lightMin: number | null;
+  lightMax: number | null;
+  /** True when the input color itself lies outside the sRGB gamut. */
+  outOfGamut: boolean;
 }
 
 export interface ColorMetaObj {

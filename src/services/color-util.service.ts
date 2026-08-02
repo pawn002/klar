@@ -1,7 +1,7 @@
 import Color from 'colorjs.io';
 import { OkcaService } from './okca.service';
 import { PluginRegistry } from '@pawn002/klar-plugin-registry';
-import { GamutMode, DEFAULT_GAMUT_MODE, applyGamut, toGamutHex, toRgb255 } from './gamut';
+import { GamutMode, DEFAULT_GAMUT_MODE, applyGamut, toGamutHex, toGamutOklch, numericCoords } from './gamut';
 import {
   ColorPair,
   ColorCoordArray,
@@ -26,22 +26,6 @@ export class ColorUtilService {
     } catch {
       return null;
     }
-  }
-
-  /**
-   * 8-bit RGB for a color under a gamut policy.
-   *
-   * This used to round raw sRGB coordinates with no clamp, so an out-of-gamut
-   * color produced values outside 0–255 (negative, or above 255) that no
-   * consumer could use. It now shares the swatch's conversion.
-   */
-  getRgb255Array(
-    color: string,
-    gamut: GamutMode = DEFAULT_GAMUT_MODE,
-  ): [number, number, number] | null {
-    const colorObj = this.parseColor(color);
-    if (!colorObj) return null;
-    return toRgb255(colorObj, gamut);
   }
 
   createSrgbColor(color: string, lightness: number): string | null {
@@ -87,26 +71,31 @@ export class ColorUtilService {
   }
 
   getMinMaxLight(color: string): MinMaxLightObject | null {
-    const initVariants = this.createVariants(color);
-    const variants = this.filterOutOfGamutVariants(initVariants);
     const parsedColor = this.parseColor(color);
+    if (!parsedColor) return null;
 
-    if (parsedColor && variants.length) {
-      const oklchColor = Color.to(parsedColor, 'oklch');
+    // `numericCoords` rather than `.coords`: colorjs.io hands back boxed Number
+    // objects for bare-number CSS coordinates, and these are published in
+    // `--json` where a consumer will compare them against real numbers.
+    const originalCoords = numericCoords(parsedColor, 'oklch');
+    const outOfGamut = !parsedColor.inGamut('srgb');
+
+    const variants = this.filterOutOfGamutVariants(this.createVariants(color));
+
+    if (variants.length) {
       return {
-        originalCoords: oklchColor.coords as ColorCoordArray,
+        originalCoords,
         lightMin: variants[0][0],
         lightMax: variants[variants.length - 1][0],
+        outOfGamut,
       };
     }
 
-    if (parsedColor) {
-      const oklchColor = Color.to(parsedColor, 'oklch');
-      const coords = oklchColor.coords as ColorCoordArray;
-      return { originalCoords: coords, lightMin: coords[0], lightMax: coords[0] };
-    }
-
-    return null;
+    // No lightness renders at this chroma and hue. This used to return the
+    // input's own lightness as both bounds, which reads as "the usable range is
+    // exactly this one value" — a confident, specific, false answer to the
+    // question the command exists to answer. There is no range; say so.
+    return { originalCoords, lightMin: null, lightMax: null, outOfGamut };
   }
 
   getRandomColorPair(): ColorPair {
@@ -528,7 +517,7 @@ export class ColorUtilService {
       case 'wcag2':
         return this.calcWcag2(colorOne, colorTwo, gamut);
       case 'okca':
-        return this.okcaService.contrast(this.toHex(c1, gamut), this.toHex(c2, gamut));
+        return this.okcaService.contrast(toGamutOklch(c1, gamut), toGamutOklch(c2, gamut));
       default: {
         const h1 = this.toHex(c1, gamut);
         const h2 = this.toHex(c2, gamut);

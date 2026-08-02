@@ -63,24 +63,57 @@ export const GAMUT_MODE_HELP =
   'Out-of-gamut handling: clip (as browsers paint today), css (CSS Color 4 chroma reduction), none (measure the authored color; unavailable for algorithms that take hex)';
 
 /**
- * Raised when a mode cannot be honored for a given algorithm rather than
- * silently substituting a different one — silent substitution is the bug this
- * module exists to prevent.
+ * Raised when a request falls outside the domain where an algorithm's result is
+ * established, rather than returning a number anyway — silently answering
+ * outside a proven domain is the bug this module exists to prevent.
+ *
+ * This is a *validity domain* limit, not a representation one. An earlier
+ * version framed it as "hex cannot express an out-of-gamut color", which is
+ * false: `OkcaService.contrast()` accepts `oklch()` strings and will happily
+ * take coordinates from anywhere. The reason to refuse is that OKCA's guarantee
+ * is established across the sRGB gamut, so outside it the number is unvalidated
+ * extrapolation — and that limit does not go away when the gamut widens.
+ *
+ * Carries the facts; the CLI layer composes the user-facing message, so no flag
+ * name is baked into a service.
  */
-export class GamutNotRepresentableError extends Error {
-  constructor(public readonly mode: GamutMode) {
+export class AlgorithmDomainError extends Error {
+  constructor(
+    public readonly mode: GamutMode,
+    public readonly algorithm: string = 'okca',
+  ) {
     super(
-      `--gamut ${mode} cannot be used with an algorithm that operates on hex. ` +
-        `Hex cannot represent a color outside the sRGB gamut, so the color would ` +
-        `have to be mapped anyway. Use --gamut clip or --gamut css, or choose an ` +
-        `algorithm that works in a continuous space (wcag2, deltaE).`,
+      `${algorithm} is established across the sRGB gamut; an unmapped ` +
+        `out-of-gamut color is outside that domain.`,
     );
-    this.name = 'GamutNotRepresentableError';
+    this.name = 'AlgorithmDomainError';
   }
 }
 
 export function isInSrgbGamut(color: Color): boolean {
   return color.inGamut('srgb');
+}
+
+/**
+ * Read a color's coordinates as primitive numbers.
+ *
+ * colorjs.io returns **boxed `Number` objects** for bare-number CSS
+ * coordinates — `oklch(0.45 0.22 25)` yields objects, while `oklch(45% ...)`
+ * and `#3b82f6` yield primitives. They behave like numbers almost everywhere:
+ * arithmetic, comparison, `toFixed`, and `JSON.stringify` all work through
+ * coercion, which is why this has gone unnoticed.
+ *
+ * Where it does not work is any check that refuses to coerce:
+ *
+ *   Number.isFinite(boxed)  →  false        // not NaN — just not a primitive
+ *   boxed === 0.22          →  false
+ *   typeof boxed            →  'object'
+ *
+ * A guard written the obvious way therefore misfires on exactly the inputs klar
+ * is built around. Normalize once, here, rather than discovering it per site.
+ */
+export function numericCoords(color: Color, space: string): [number, number, number] {
+  return color.to(space).coords.map(Number) as [number, number, number];
 }
 
 /**
@@ -127,12 +160,54 @@ export function applyGamut(color: Color, mode: GamutMode): Color {
 }
 
 /**
- * Resolve a color to hex under a gamut policy, for algorithms that take hex
- * (OKCA and every plugin). Throws on `none` rather than quietly mapping.
+ * Resolve a color to hex under a gamut policy, for **plugin** algorithms.
+ *
+ * Plugins receive hex and only hex. The interface gives them no way to declare
+ * what they accept (see klar#11), so klar cannot know that a given plugin would
+ * parse anything else — handing them `oklch()` because okca happens to accept it
+ * would break any plugin that only reads hex, silently. Built-ins whose input
+ * contract *is* known use `toGamutOklch` instead.
  */
 export function toGamutHex(color: Color, mode: GamutMode): string {
-  if (mode === 'none') throw new GamutNotRepresentableError(mode);
+  if (mode === 'none') throw new AlgorithmDomainError(mode, 'this algorithm');
   return applyGamut(color, mode).to('srgb').toString({ format: 'hex' });
+}
+
+/**
+ * Resolve a color to an `oklch()` string under a gamut policy, at full precision.
+ *
+ * OKCA accepts `oklch()` directly, so routing it here instead of through hex
+ * removes an 8-bit quantization step that made it disagree slightly with the
+ * continuous algorithms (`wcag2`, `deltaE`) about which color was being
+ * measured. It also drops an sRGB-shaped bottleneck: hex cannot carry
+ * wide-gamut coordinates and `oklch()` can.
+ *
+ * Two coordinate hazards are normalized here, both of which make okca return
+ * `null` rather than fail loudly:
+ *
+ *  - **Achromatic colors get a `NaN` hue.** `#767676` converts to
+ *    `oklch(0.5658 6.2e-16 NaN)`. Every neutral in a design system hits this,
+ *    so it would not be a rare edge — it would be most of a token set.
+ *  - **Residual chroma arrives in exponent notation.** That same conversion
+ *    yields `6.206335383118183e-16`, which is not valid CSS number syntax.
+ *
+ * Both are artifacts of floating-point conversion rather than real color
+ * information, so both are flattened.
+ */
+export function toGamutOklch(color: Color, mode: GamutMode, algorithm = 'okca'): string {
+  if (mode === 'none') throw new AlgorithmDomainError(mode, algorithm);
+
+  // `numericCoords`, not `.coords` — the guards below use `Number.isFinite`,
+  // which returns false for a boxed coordinate and would zero out a valid chroma.
+  const [l, c, h] = numericCoords(applyGamut(color, mode), 'oklch');
+
+  // Below this, chroma is conversion noise, not color — and it is exactly the
+  // range that serializes to exponent notation.
+  const chroma = !Number.isFinite(c) || Math.abs(c) < 1e-6 ? 0 : c;
+  // Hue is undefined for an achromatic color; any finite value is equivalent.
+  const hue = Number.isFinite(h) ? h : 0;
+
+  return `oklch(${l} ${chroma} ${hue})`;
 }
 
 /** 8-bit RGB under a gamut policy — for ANSI swatches. */

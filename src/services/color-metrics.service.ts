@@ -3,7 +3,7 @@ import { ContrastType } from './types';
 import { ColorUtilService } from './color-util.service';
 import { OkcaService } from './okca.service';
 import { PluginRegistry } from '@pawn002/klar-plugin-registry';
-import { GamutMode, DEFAULT_GAMUT_MODE, applyGamut, toGamutHex } from './gamut';
+import { GamutMode, DEFAULT_GAMUT_MODE, applyGamut, toGamutHex, toGamutOklch } from './gamut';
 
 export class ColorMetricsService {
   constructor(
@@ -45,31 +45,22 @@ export class ColorMetricsService {
         : parseFloat(c1.contrast(c2, 'WCAG21').toFixed(1));
     }
 
-    // Everything below takes hex, so `none` throws rather than silently mapping.
-    const h1 = toGamutHex(parsedOne, gamut);
-    const h2 = toGamutHex(parsedTwo, gamut);
-
+    // OKCA accepts `oklch()`, so it is scored at full precision rather than
+    // through an 8-bit hex round-trip.
     if (contrastType === 'okca') {
-      return this.okcaService.contrast(h1, h2);
+      return this.okcaService.contrast(
+        toGamutOklch(parsedOne, gamut),
+        toGamutOklch(parsedTwo, gamut),
+      );
     }
 
-    // Plugin lookup for non-built-in types
+    // Plugins receive hex — they have no way to declare anything else (klar#11).
     const plugin = this.pluginRegistry?.get(contrastType);
     if (plugin) {
-      return plugin.calculate(h1, h2);
+      return plugin.calculate(toGamutHex(parsedOne, gamut), toGamutHex(parsedTwo, gamut));
     }
 
     return null;
-  }
-
-  calculateOKCA(foreground: Color, background: Color, gamut: GamutMode = DEFAULT_GAMUT_MODE): number {
-    const fgHex = toGamutHex(foreground, gamut);
-    const bgHex = toGamutHex(background, gamut);
-    const result = this.okcaService.contrast(fgHex, bgHex);
-    if (result === null) {
-      throw new Error('Unable to calculate OKCA contrast');
-    }
-    return result;
   }
 
   calcRawOkcaContrast(colorOne: string, colorTwo: string): number | null {

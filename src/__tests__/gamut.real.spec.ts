@@ -1,13 +1,16 @@
 import Color from 'colorjs.io';
+import { OkcaService } from '@pawn002/okca';
 import {
   GAMUT_MODES,
   DEFAULT_GAMUT_MODE,
-  GamutNotRepresentableError,
+  AlgorithmDomainError,
   isInSrgbGamut,
   clipToSrgb,
   cssMapToSrgb,
   applyGamut,
   toGamutHex,
+  toGamutOklch,
+  numericCoords,
   toRgb255,
   describeGamut,
 } from '../services/gamut';
@@ -65,7 +68,7 @@ describe('gamut policy', () => {
 
     it('refuses to resolve to hex rather than silently mapping', () => {
       expect(() => toGamutHex(new Color('oklch(0.79 0.22 25)'), 'none')).toThrow(
-        GamutNotRepresentableError,
+        AlgorithmDomainError,
       );
     });
   });
@@ -158,9 +161,12 @@ describe('contrast is gamut-aware (issue #9)', () => {
     }
   });
 
-  it('throws rather than substituting a color for hex-based algorithms', () => {
+  it('refuses rather than answering outside the algorithm\'s proven domain', () => {
+    // Not a representation limit — okca accepts `oklch()` and would return a
+    // number. Its guarantee is established across the sRGB gamut, so outside it
+    // the answer would be unvalidated extrapolation.
     expect(() => colorMetricsService.getContrast(fg, bg, 'okca', 'none')).toThrow(
-      GamutNotRepresentableError,
+      AlgorithmDomainError,
     );
   });
 
@@ -169,5 +175,101 @@ describe('contrast is gamut-aware (issue #9)', () => {
     // computed on another.
     expect(colorSwatch(fg, 'clip')).toContain('\x1b[38;2;255;116;111m');
     expect(colorSwatch(fg, 'css')).toContain('\x1b[38;2;255;147;139m');
+  });
+});
+
+describe('okca is scored via oklch() at full precision', () => {
+  const okca = new OkcaService();
+  const { colorMetricsService } = getServices();
+
+  describe('achromatic colors', () => {
+    // The landmine. Converting a gray to OKLCH yields a NaN hue and a chroma
+    // like 6.2e-16 — the first makes okca return null, the second serializes to
+    // exponent notation that is not valid CSS. Neutrals are the most common
+    // color in a design system, so this would have been most of a token set,
+    // failing silently as `null` rather than as an error.
+    const GRAYS = ['#000000', '#767676', '#888888', '#cccccc', '#ffffff'];
+
+    it.each(GRAYS)('%s serializes to parseable oklch()', (gray) => {
+      const str = toGamutOklch(new Color(gray), 'clip');
+      expect(str).not.toContain('NaN');
+      expect(str).not.toMatch(/e[+-]\d+/);
+      expect(okca.contrast(str, '#ffffff')).not.toBeNull();
+    });
+
+    it.each(GRAYS)('%s returns a contrast, not null', (gray) => {
+      expect(colorMetricsService.getContrast(gray, '#ffffff', 'okca')).not.toBeNull();
+    });
+  });
+
+  describe('parity with the hex route it replaces', () => {
+    // Routing through oklch() removes an 8-bit quantization step. A 4000-pair
+    // random sweep found zero differences at okca's reported precision, so this
+    // is a no-op for in-gamut colors — it closes the gap with the continuous
+    // algorithms without moving any existing number.
+    const PAIRS: Array<[string, string]> = [
+      ['#ff746f', '#070e16'],
+      ['#3b82f6', '#070e16'],
+      ['#e94560', '#070e16'],
+      ['#ffffff', '#000000'],
+      ['#767676', '#ffffff'],
+      ['#1a1a2e', '#e94560'],
+    ];
+
+    it.each(PAIRS)('%s on %s matches the hex route', (fg, bg) => {
+      const viaHex = okca.contrast(fg, bg);
+      const viaOklch = okca.contrast(
+        toGamutOklch(new Color(fg), 'clip'),
+        toGamutOklch(new Color(bg), 'clip'),
+      );
+      expect(viaOklch).toBe(viaHex);
+    });
+  });
+
+  it('still refuses an unmapped out-of-gamut color', () => {
+    expect(() => toGamutOklch(new Color('oklch(0.79 0.22 25)'), 'none')).toThrow(
+      AlgorithmDomainError,
+    );
+  });
+});
+
+describe('boxed coordinates from colorjs.io', () => {
+  // colorjs.io returns boxed Number objects for bare-number CSS coordinates.
+  // They coerce correctly under arithmetic, comparison, toFixed and
+  // JSON.stringify — but not under Number.isFinite, strict equality, or typeof.
+  // A guard written the obvious way misfires on exactly the input klar exists
+  // to handle.
+  it('is a real hazard, not a hypothetical one', () => {
+    const raw = new Color('oklch(0.45 0.22 25)').to('oklch').coords[1];
+    expect(typeof raw).toBe('object');
+    expect(Number.isFinite(raw)).toBe(false);
+    expect(Number(raw)).toBe(0.22);
+  });
+
+  it('does not survive numericCoords', () => {
+    const coords = numericCoords(new Color('oklch(0.45 0.22 25)'), 'oklch');
+    for (const c of coords) {
+      expect(typeof c).toBe('number');
+      expect(Number.isFinite(c)).toBe(true);
+    }
+    expect(coords[1]).toBe(0.22);
+  });
+
+  it('does not zero out a valid chroma in toGamutOklch', () => {
+    // The failure this guards: `Number.isFinite(boxed)` is false, so the
+    // "chroma is conversion noise" branch would fire on a fully saturated color
+    // and okca would score every oklch-string input as achromatic.
+    for (const mode of ['clip', 'css'] as const) {
+      const str = toGamutOklch(new Color('oklch(0.6 0.15 260)'), mode);
+      const chroma = Number(str.match(/oklch\(\S+ (\S+)/)![1]);
+      expect(chroma).toBeGreaterThan(0.01);
+    }
+  });
+
+  it('publishes primitive numbers in the lightness payload', () => {
+    const { colorUtilService } = getServices();
+    for (const c of colorUtilService.getMinMaxLight('oklch(0.45 0.22 25)')!.originalCoords) {
+      expect(typeof c).toBe('number');
+    }
   });
 });

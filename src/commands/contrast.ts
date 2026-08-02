@@ -6,7 +6,7 @@ import {
   GAMUT_MODE_HELP,
   GamutMode,
   DEFAULT_GAMUT_MODE,
-  GamutNotRepresentableError,
+  AlgorithmDomainError,
   describeGamut,
 } from '../services/gamut';
 import { output, errorOut, OutputOptions } from '../utils/output';
@@ -70,7 +70,7 @@ Examples:
         // `--gamut none` against an algorithm that takes hex. Refusing beats
         // silently measuring a different color — the failure this command was
         // fixed for.
-        if (err instanceof GamutNotRepresentableError) errorOut(err.message);
+        if (err instanceof AlgorithmDomainError) errorOut(err.message);
         throw err;
       }
       if (contrast === null) errorOut('Unable to calculate contrast for the given colors');

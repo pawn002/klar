@@ -134,16 +134,31 @@ export function formatMatchChromas(data: {
 
 export function formatLightness(data: {
   originalCoords: [number, number, number];
-  lightMin: number;
-  lightMax: number;
+  lightMin: number | null;
+  lightMax: number | null;
+  outOfGamut: boolean;
   color: string;
 }): string {
-  const lines = [
-    `Lightness Range for ${colorSwatch(data.color)} ${data.color}`,
-    `  Min: ${data.lightMin.toFixed(4)}`,
-    `  Max: ${data.lightMax.toFixed(4)}`,
-    `  OKLCH: [${data.originalCoords.map((c) => c.toFixed(4)).join(', ')}]`,
-  ];
+  const lines = [`Lightness Range for ${colorSwatch(data.color)} ${data.color}`];
+
+  if (data.lightMin === null || data.lightMax === null) {
+    lines.push(`  No lightness renders at this chroma and hue.`);
+    lines.push(`  OKLCH: [${data.originalCoords.map((c) => c.toFixed(4)).join(', ')}]`);
+    lines.push(`  Reduce chroma below ${data.originalCoords[1].toFixed(4)} to get a usable range.`);
+    return lines.join('\n');
+  }
+
+  lines.push(`  Min: ${data.lightMin.toFixed(4)}`);
+  lines.push(`  Max: ${data.lightMax.toFixed(4)}`);
+  lines.push(`  OKLCH: [${data.originalCoords.map((c) => c.toFixed(4)).join(', ')}]`);
+
+  // The input's own lightness can sit outside the range this command reports —
+  // that is the signal that the color as authored is not renderable, and it is
+  // easy to miss when the numbers are read without comparing them.
+  if (data.outOfGamut) {
+    lines.push(`  ! outside sRGB as authored; the range above is what this chroma allows.`);
+  }
+
   return lines.join('\n');
 }
 

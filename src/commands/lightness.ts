@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { getServices } from '../services';
-import { output, errorOut, OutputOptions } from '../utils/output';
+import { output, errorOut, markFailure, OutputOptions } from '../utils/output';
 import { formatLightness } from '../formatters/human';
 
 export function lightnessCommand(): Command {
@@ -23,22 +23,26 @@ Examples:
       if (!result) errorOut('Unable to calculate lightness range');
 
       const outputOpts: OutputOptions = { json: opts.json, quiet: opts.quiet };
+      const { originalCoords, lightMin, lightMax, outOfGamut } = result!;
+      const emptyRange = lightMin === null || lightMax === null;
 
       if (opts.quiet) {
-        output({ quietValue: `${result!.lightMin.toFixed(4)} ${result!.lightMax.toFixed(4)}` }, outputOpts);
+        // Nothing to print when there is no range — a pair of numbers here would
+        // be the defect this replaced. Exit 1 and the stderr note carry it.
+        if (!emptyRange) {
+          output({ quietValue: `${lightMin!.toFixed(4)} ${lightMax!.toFixed(4)}` }, outputOpts);
+        }
       } else if (opts.json) {
-        output({
-          originalCoords: result!.originalCoords,
-          lightMin: result!.lightMin,
-          lightMax: result!.lightMax,
-        }, outputOpts);
+        output({ originalCoords, lightMin, lightMax, gamut: { outOfGamut } }, outputOpts);
       } else {
-        output(formatLightness({
-          originalCoords: result!.originalCoords,
-          lightMin: result!.lightMin,
-          lightMax: result!.lightMax,
-          color,
-        }), outputOpts);
+        output(formatLightness({ originalCoords, lightMin, lightMax, outOfGamut, color }), outputOpts);
+      }
+
+      if (emptyRange) {
+        markFailure(
+          `klar: no lightness renders ${color} at chroma ${originalCoords[1].toFixed(4)}; ` +
+            `reduce chroma for a usable range`,
+        );
       }
     });
 }
