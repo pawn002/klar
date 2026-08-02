@@ -51,14 +51,36 @@ export interface TableColorCell {
 
 export type TableData = Array<Array<TableColorCell>>;
 
+/**
+ * Why `find` stopped, as a machine-readable value.
+ *
+ * These describe the *caller's* constraint, not klar's limitation:
+ *  - `lightness-exhausted` — desaturation was not permitted, and lightness alone
+ *    could not reach the target. A solution may still exist; see `resolvableBy`.
+ *  - `chroma-exhausted` — desaturation was permitted and chroma reached 0 at the
+ *    reference's lightness without reaching the target.
+ *  - `unreachable` — the target exceeds what *any* color can reach against this
+ *    base. Changing the reference color cannot help; the base has to change.
+ *
+ * `message` remains human prose and is not stable. Branch on this.
+ */
+export type FindReason = 'ok' | 'lightness-exhausted' | 'chroma-exhausted' | 'unreachable';
+
+/** An axis moved in service of the target. Gamut normalization is not an axis. */
+export type FindAxis = 'lightness' | 'chroma';
+
 export interface TargetContrastOptions {
   baseColor: string;
   referenceColor: string;
   targetContrast: number;
   contrastType: ContrastType;
   tolerance?: number;
-  /** Out-of-gamut handling for the contrast measurement. Defaults to `clip`. */
-  gamut?: GamutMode;
+  /**
+   * Permit reducing chroma to reach the target. Off by default: trading brand
+   * saturation for contrast is a design decision, and an agent accepting a
+   * desaturated brand color silently produces drift no single call reveals.
+   */
+  allowDesaturation?: boolean;
 }
 
 export interface TargetContrastResult {
@@ -66,10 +88,23 @@ export interface TargetContrastResult {
   actualContrast: number;
   iterations: number;
   success: boolean;
+  reason: FindReason;
+  /** Which axes moved to reach the target. Empty when nothing needed to move. */
+  axesAdjusted: FindAxis[];
+  /** Perceptual drift from the reference color, Delta E 2000. */
+  deltaE: number | null;
+  /**
+   * Present on `lightness-exhausted`: the chroma that *would* reach the target
+   * at the reference color's original lightness, and what it costs — reported
+   * without being applied, so a human can decide.
+   */
+  resolvableBy?: { chroma: number; deltaE: number | null };
   message?: string;
   oklch?: {
     l: number;
     c: number;
     h: number;
   };
+  /** Whether the reference color needed normalizing into the gamut, and to what. */
+  gamut: { outOfGamut: boolean; measured?: string };
 }

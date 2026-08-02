@@ -160,8 +160,13 @@ export function formatFind(data: {
   actualContrast: number;
   iterations: number;
   success: boolean;
+  reason?: string;
+  axesAdjusted?: string[];
+  deltaE?: number | null;
+  resolvableBy?: { chroma: number; deltaE: number | null };
   message?: string;
   oklch?: { l: number; c: number; h: number };
+  gamut?: { outOfGamut: boolean; measured?: string };
   baseColor: string;
   targetContrast: number;
   contrastType: string;
@@ -176,7 +181,33 @@ export function formatFind(data: {
   if (data.oklch) {
     lines.push(`  OKLCH: [${data.oklch.l.toFixed(4)}, ${data.oklch.c.toFixed(4)}, ${data.oklch.h.toFixed(1)}]`);
   }
+  if (data.axesAdjusted?.length) {
+    lines.push(`  Moved: ${data.axesAdjusted.join(', ')}`);
+  }
+  if (typeof data.deltaE === 'number') {
+    lines.push(`  Drift: ${data.deltaE} ΔE from the reference`);
+  }
+
+  // Normalization is not a failure, but the returned color is not the one that
+  // was asked about, and that should not have to be inferred.
+  if (data.gamut?.outOfGamut) {
+    lines.push(`  ! reference was outside sRGB; normalized to ${data.gamut.measured}`);
+  }
+
   lines.push(`  Iterations: ${data.iterations}`);
   if (data.message) lines.push(`  ${data.message}`);
+
+  // The escalation. A compliant color exists but costs saturation — a brand
+  // decision, so it is quoted with its price rather than quietly applied.
+  if (data.resolvableBy) {
+    lines.push(
+      `  → chroma ${data.resolvableBy.chroma.toFixed(3)} would reach the target` +
+        (typeof data.resolvableBy.deltaE === 'number'
+          ? ` (${data.resolvableBy.deltaE} ΔE from the reference)`
+          : ''),
+    );
+    lines.push(`    Apply with --allow-desaturation, or take it to a human.`);
+  }
+
   return lines.join('\n');
 }

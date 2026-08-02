@@ -1,7 +1,15 @@
 import Color from 'colorjs.io';
 import { OkcaService } from './okca.service';
 import { PluginRegistry } from '@pawn002/klar-plugin-registry';
-import { GamutMode, DEFAULT_GAMUT_MODE, applyGamut, toGamutHex, toGamutOklch, numericCoords } from './gamut';
+import {
+  GamutMode,
+  DEFAULT_GAMUT_MODE,
+  applyGamut,
+  cssMapToSrgb,
+  toGamutHex,
+  toGamutOklch,
+  numericCoords,
+} from './gamut';
 import {
   ColorPair,
   ColorCoordArray,
@@ -12,6 +20,8 @@ import {
   TableData,
   TargetContrastOptions,
   TargetContrastResult,
+  FindAxis,
+  FindReason,
 } from './types';
 
 export class ColorUtilService {
@@ -526,48 +536,72 @@ export class ColorUtilService {
     }
   }
 
-  findColorForTargetContrast(options: TargetContrastOptions): TargetContrastResult {
-    const {
-      baseColor,
-      referenceColor,
-      targetContrast,
-      contrastType,
-      tolerance = 0.5,
-      gamut = DEFAULT_GAMUT_MODE,
-    } = options;
-
-    const refColorObj = this.parseColor(referenceColor);
-    if (!refColorObj) throw new Error('Invalid reference color');
-
-    const refOklch = refColorObj.to('oklch');
-    const originalLightness = refOklch.coords[0];
-    const chroma = refOklch.coords[1];
-    const hue = refOklch.coords[2];
-
-    const baseColorObj = this.parseColor(baseColor);
-    if (!baseColorObj) throw new Error('Invalid base color');
-    const baseLightness = baseColorObj.to('oklch').coords[0];
+  /**
+   * Binary-search lightness at a fixed chroma and hue for a color meeting the
+   * target. Candidates outside the gamut are skipped, so a chroma that only
+   * renders across part of the lightness range still searches the part it does.
+   */
+  private searchLightness(params: {
+    baseColor: string;
+    baseLightness: number;
+    anchorLightness: number;
+    chroma: number;
+    hue: number;
+    targetContrast: number;
+    contrastType: string;
+    tolerance: number;
+    gamut: GamutMode;
+  }): {
+    best: { hex: string; contrast: number; l: number } | null;
+    bestAchievable: { hex: string; contrast: number; l: number } | null;
+    iterations: number;
+  } {
+    const { baseColor, baseLightness, anchorLightness, chroma, hue } = params;
+    const { targetContrast, contrastType, tolerance, gamut } = params;
 
     let low = 0;
     let high = 1;
     let iterations = 0;
     const maxIterations = 20;
 
-    // `find` treats the target as a floor (a minimum contrast to meet), so a
-    // result only counts as success when it reaches or exceeds the target.
-    // `best` holds the satisfying candidate with the least overshoot; the
+    // The target is a floor, so a result only counts when it reaches or exceeds
+    // it. `best` is the satisfying candidate with the least overshoot; the
     // tolerance is the band *above* the target within which we stop early.
     let best: { hex: string; contrast: number; l: number } | null = null;
-    // The highest contrast we could reach — used when the target is
-    // unachievable, so we can report the closest color instead of the input.
     let bestAchievable: { hex: string; contrast: number; l: number } | null = null;
+
+    // Evaluate the anchor before bisecting.
+    //
+    // A bisection over [0,1] can converge without ever testing the reference's
+    // own lightness, and for a saturated hue that is often the *only* place the
+    // chroma renders at all — every midpoint falls outside the gamut and gets
+    // skipped. The result was `find` reporting a target unreachable while the
+    // unmodified reference already met it. It is also the semantically obvious
+    // first candidate: if the color as given already clears the floor, nothing
+    // needs to move.
+    const anchor = new Color('oklch', [anchorLightness, chroma, hue]);
+    if (anchor.inGamut('srgb')) {
+      const anchorHex = anchor.to('srgb').toString({ format: 'hex' });
+      const anchorContrast = this.calculateContrastByType(anchorHex, baseColor, contrastType, gamut);
+      if (anchorContrast !== null) {
+        const abs = Math.abs(anchorContrast);
+        bestAchievable = { hex: anchorHex, contrast: anchorContrast, l: anchorLightness };
+        if (abs >= targetContrast) {
+          best = { hex: anchorHex, contrast: anchorContrast, l: anchorLightness };
+          // Already within the stop band — the reference needs no adjustment.
+          if (abs - targetContrast <= tolerance) {
+            return { best, bestAchievable, iterations: 1 };
+          }
+        }
+      }
+    }
 
     while (iterations < maxIterations && high - low > 0.001) {
       const mid = (low + high) / 2;
       const testColor = new Color('oklch', [mid, chroma, hue]);
 
       if (!testColor.inGamut('srgb')) {
-        if (mid > originalLightness) high = mid;
+        if (mid > anchorLightness) high = mid;
         else low = mid;
         iterations++;
         continue;
@@ -585,59 +619,236 @@ export class ColorUtilService {
       }
 
       if (absContrast >= targetContrast) {
-        // Meets the floor — keep the closest-to-target satisfying candidate.
         if (!best || absContrast < Math.abs(best.contrast)) {
           best = { hex: testColorHex, contrast, l: mid };
         }
-        // Close enough above the target: accept and stop.
-        if (absContrast - targetContrast <= tolerance) {
-          return {
-            adjustedColor: testColorHex,
-            actualContrast: contrast,
-            iterations,
-            success: true,
-            oklch: { l: mid, c: chroma, h: hue },
-          };
-        }
-        // Overshooting — reduce contrast toward the target.
+        if (absContrast - targetContrast <= tolerance) break;
         if (baseLightness > 0.5) low = mid;
         else high = mid;
       } else {
-        // Below the floor — increase contrast.
         if (baseLightness > 0.5) high = mid;
         else low = mid;
       }
     }
 
-    // The search narrowed without landing in the stop band, but we may still
-    // have found a color at or above the target — return the least-overshoot one.
-    if (best) {
+    return { best, bestAchievable, iterations };
+  }
+
+  /**
+   * The least desaturation that reaches the target at a fixed lightness and hue.
+   *
+   * Walks chroma downward from `maxChroma` and returns the first value that
+   * meets the target, which is the largest — i.e. the smallest sacrifice of
+   * saturation that works. A stepped walk rather than a bisection because
+   * contrast is not guaranteed monotonic in chroma for every hue and base, and
+   * the range is small enough that robustness is worth more than speed.
+   */
+  private searchChroma(params: {
+    baseColor: string;
+    lightness: number;
+    hue: number;
+    maxChroma: number;
+    targetContrast: number;
+    contrastType: string;
+    gamut: GamutMode;
+  }): { chroma: number; contrast: number; hex: string } | null {
+    const { baseColor, lightness, hue, maxChroma, targetContrast, contrastType, gamut } = params;
+    const STEP = 0.002;
+
+    for (let c = maxChroma; c >= -STEP; c -= STEP) {
+      const chroma = Math.max(0, c);
+      const candidate = new Color('oklch', [lightness, chroma, hue]);
+      if (!candidate.inGamut('srgb')) continue;
+
+      const hex = candidate.to('srgb').toString({ format: 'hex' });
+      const contrast = this.calculateContrastByType(hex, baseColor, contrastType, gamut);
+      if (contrast !== null && Math.abs(contrast) >= targetContrast) {
+        return { chroma, contrast, hex };
+      }
+      if (chroma === 0) break;
+    }
+    return null;
+  }
+
+  /**
+   * The highest contrast any color can reach against this base.
+   *
+   * Maximum contrast is always against black or white, so this bounds the whole
+   * color space. It is what separates "not reachable under your constraints"
+   * from "not reachable at all", which are different facts an agent has to act
+   * on differently — the first is solved by relaxing a constraint, the second
+   * only by changing the base color.
+   */
+  private contrastCeiling(baseColor: string, contrastType: string, gamut: GamutMode): number {
+    const black = this.calculateContrastByType('#000000', baseColor, contrastType, gamut) ?? 0;
+    const white = this.calculateContrastByType('#ffffff', baseColor, contrastType, gamut) ?? 0;
+    return Math.max(Math.abs(black), Math.abs(white));
+  }
+
+  /**
+   * Find a color meeting a target contrast against a fixed base.
+   *
+   * Two chroma operations are involved and only one is optional:
+   *
+   *  1. **Gamut normalization is mandatory.** An out-of-gamut reference is
+   *     chroma-reduced onto the gamut boundary before anything else. Without it
+   *     there is no renderable color to return — this is the difference between
+   *     an answer and nothing, not a choice. It also makes "returns the input
+   *     unchanged" structurally impossible, which was the defect in klar 2.x.
+   *  2. **Target-reaching desaturation is optional and off by default.** Once
+   *     the color is renderable, only lightness moves. Trading brand saturation
+   *     for contrast is a design decision, so when lightness runs out `find`
+   *     reports what *would* work (`resolvableBy`) and exits 1 rather than
+   *     applying it.
+   *
+   * Producing commands always use the standard mapping — there is no gamut
+   * option here, because every place one could apply is either structural or a
+   * no-op on candidates that are in-gamut by construction.
+   */
+  findColorForTargetContrast(options: TargetContrastOptions): TargetContrastResult {
+    const {
+      baseColor,
+      referenceColor,
+      targetContrast,
+      contrastType,
+      tolerance = 0.5,
+      allowDesaturation = false,
+    } = options;
+
+    const gamut: GamutMode = 'css';
+
+    const refColorObj = this.parseColor(referenceColor);
+    if (!refColorObj) throw new Error('Invalid reference color');
+    const baseColorObj = this.parseColor(baseColor);
+    if (!baseColorObj) throw new Error('Invalid base color');
+
+    const [originalLightness] = numericCoords(refColorObj, 'oklch');
+    const outOfGamut = !refColorObj.inGamut('srgb');
+
+    // --- Step 1: mandatory gamut normalization -----------------------------
+    const normalized = outOfGamut ? cssMapToSrgb(refColorObj) : refColorObj;
+    const [normalizedLightness, workingChroma, rawHue] = numericCoords(normalized, 'oklch');
+    const hue = Number.isFinite(rawHue) ? rawHue : 0;
+    const normalizedHex = normalized.to('srgb').toString({ format: 'hex' });
+    const gamutReport = outOfGamut
+      ? { outOfGamut: true, measured: normalizedHex }
+      : { outOfGamut: false };
+
+    const baseLightness = numericCoords(baseColorObj, 'oklch')[0];
+    const driftFrom = (hex: string) => this.calcDeltaE(hex, referenceColor, gamut);
+
+    // --- Step 2: lightness, at the normalized chroma ------------------------
+    const pass = this.searchLightness({
+      baseColor,
+      baseLightness,
+      // The normalized lightness, not the authored one: gamut mapping can shift
+      // L, and this anchor has to be a point where `workingChroma` renders.
+      anchorLightness: normalizedLightness,
+      chroma: workingChroma,
+      hue,
+      targetContrast,
+      contrastType,
+      tolerance,
+      gamut,
+    });
+
+    if (pass.best) {
+      // Movement is measured from the normalized color: gamut normalization is
+      // reported under `gamut`, not as an axis the caller asked to move.
+      const axes: FindAxis[] =
+        Math.abs(pass.best.l - normalizedLightness) > 1e-6 ? ['lightness'] : [];
       return {
-        adjustedColor: best.hex,
-        actualContrast: best.contrast,
-        iterations,
+        adjustedColor: pass.best.hex,
+        actualContrast: pass.best.contrast,
+        iterations: pass.iterations,
         success: true,
-        oklch: { l: best.l, c: chroma, h: hue },
+        reason: 'ok',
+        axesAdjusted: axes,
+        deltaE: driftFrom(pass.best.hex),
+        oklch: { l: pass.best.l, c: workingChroma, h: hue },
+        gamut: gamutReport,
       };
     }
 
-    // Target unachievable by lightness alone — return the closest color we
-    // reached (not the unchanged input), clearly marked as a failure.
-    const fallback = bestAchievable ?? {
-      hex: referenceColor,
-      contrast: this.calculateContrastByType(referenceColor, baseColor, contrastType, gamut) ?? 0,
+    // --- Step 3: what would chroma do, at the *original* lightness? ---------
+    // Quoted against the lightness the author chose, not the one the search
+    // drifted to — "keep your lightness, drop chroma to X" is actionable in a
+    // way a figure against an unfamiliar lightness is not. `--allow-desaturation`
+    // searches from the same starting point so the two agree on the cost.
+    const viaChroma = this.searchChroma({
+      baseColor,
+      lightness: originalLightness,
+      hue,
+      maxChroma: workingChroma,
+      targetContrast,
+      contrastType,
+      gamut,
+    });
+
+    if (allowDesaturation && viaChroma) {
+      const axes: FindAxis[] = ['chroma'];
+      return {
+        adjustedColor: viaChroma.hex,
+        actualContrast: viaChroma.contrast,
+        iterations: pass.iterations,
+        success: true,
+        reason: 'ok',
+        axesAdjusted: axes,
+        deltaE: driftFrom(viaChroma.hex),
+        oklch: { l: originalLightness, c: viaChroma.chroma, h: hue },
+        gamut: gamutReport,
+      };
+    }
+
+    // --- Failure. Say which constraint bound the search. --------------------
+    const ceiling = this.contrastCeiling(baseColor, contrastType, gamut);
+    const reason: FindReason =
+      targetContrast > ceiling
+        ? 'unreachable'
+        : allowDesaturation
+          ? 'chroma-exhausted'
+          : 'lightness-exhausted';
+
+    // Always renderable: normalization ran before the search, so the worst case
+    // is the normalized reference rather than an unusable input echoed back.
+    const fallback = pass.bestAchievable ?? {
+      hex: normalizedHex,
+      contrast: this.calculateContrastByType(normalizedHex, baseColor, contrastType, gamut) ?? 0,
       l: originalLightness,
     };
+
+    const message =
+      reason === 'unreachable'
+        ? `Target contrast ${targetContrast} exceeds the maximum reachable against ` +
+          `${baseColor} (${ceiling.toFixed(1)}, at black or white). No color meets it; ` +
+          `the base color has to change.`
+        : reason === 'chroma-exhausted'
+          ? `Target contrast ${targetContrast} not reached even at chroma 0 ` +
+            `(closest: ${Math.abs(fallback.contrast)}).`
+          : `Target contrast ${targetContrast} not reachable by lightness alone ` +
+            `(closest: ${Math.abs(fallback.contrast)}).` +
+            (viaChroma
+              ? ` Reducing chroma to ${viaChroma.chroma.toFixed(3)} would reach it — ` +
+                `pass --allow-desaturation to apply that.`
+              : ` Chroma reduction at this lightness does not reach it either ` +
+                `(the target is below what this base allows, so a combination of ` +
+                `lower chroma and a different lightness may exist — klar moves one ` +
+                `axis at a time and will not find it).`);
+
     return {
       adjustedColor: fallback.hex,
       actualContrast: fallback.contrast,
-      iterations,
+      iterations: pass.iterations,
       success: false,
-      message:
-        `Target contrast ${targetContrast} not achievable by adjusting lightness only ` +
-        `(closest reached: ${Math.abs(fallback.contrast)}). ` +
-        `Chroma: ${chroma.toFixed(3)}, Hue: ${hue.toFixed(1)}`,
-      oklch: { l: fallback.l, c: chroma, h: hue },
+      reason,
+      axesAdjusted: [],
+      deltaE: driftFrom(fallback.hex),
+      ...(reason === 'lightness-exhausted' && viaChroma
+        ? { resolvableBy: { chroma: viaChroma.chroma, deltaE: driftFrom(viaChroma.hex) } }
+        : {}),
+      message,
+      oklch: { l: fallback.l, c: workingChroma, h: hue },
+      gamut: gamutReport,
     };
   }
 }
