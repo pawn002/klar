@@ -1,3 +1,5 @@
+import { GamutMode } from './gamut';
+
 /** IDs of the contrast algorithms built into klar (no plugin required). */
 export const BUILTIN_CONTRAST_TYPES = ['okca', 'deltaE', 'wcag2'] as const;
 export type BuiltinContrastType = (typeof BUILTIN_CONTRAST_TYPES)[number];
@@ -19,8 +21,15 @@ export class ChromaMatchObject {
 
 export interface MinMaxLightObject {
   originalCoords: ColorCoordArray;
-  lightMin: number;
-  lightMax: number;
+  /**
+   * Bounds of the in-gamut lightness range at this color's chroma and hue,
+   * or `null` when the chroma puts the color outside the gamut at *every*
+   * lightness — i.e. there is no usable range at all.
+   */
+  lightMin: number | null;
+  lightMax: number | null;
+  /** True when the input color itself lies outside the sRGB gamut. */
+  outOfGamut: boolean;
 }
 
 export interface ColorMetaObj {
@@ -42,12 +51,37 @@ export interface TableColorCell {
 
 export type TableData = Array<Array<TableColorCell>>;
 
+/**
+ * Why `find` stopped, as a machine-readable value.
+ *
+ * These describe the *caller's* constraint, not klar's limitation:
+ *  - `lightness-exhausted` — desaturation was not permitted, and lightness alone
+ *    could not reach the target. A solution may still exist; see `resolvableBy`.
+ *  - `chroma-exhausted` — desaturation was permitted and no chroma at any
+ *    lightness reached the target. Defensive: below the contrast ceiling the
+ *    achromatic ramp always reaches it, so this should not occur.
+ *  - `unreachable` — the target exceeds what *any* color can reach against this
+ *    base. Changing the reference color cannot help; the base has to change.
+ *
+ * `message` remains human prose and is not stable. Branch on this.
+ */
+export type FindReason = 'ok' | 'lightness-exhausted' | 'chroma-exhausted' | 'unreachable';
+
+/** An axis moved in service of the target. Gamut normalization is not an axis. */
+export type FindAxis = 'lightness' | 'chroma';
+
 export interface TargetContrastOptions {
   baseColor: string;
   referenceColor: string;
   targetContrast: number;
   contrastType: ContrastType;
   tolerance?: number;
+  /**
+   * Permit reducing chroma to reach the target. Off by default: trading brand
+   * saturation for contrast is a design decision, and an agent accepting a
+   * desaturated brand color silently produces drift no single call reveals.
+   */
+  allowDesaturation?: boolean;
 }
 
 export interface TargetContrastResult {
@@ -55,10 +89,27 @@ export interface TargetContrastResult {
   actualContrast: number;
   iterations: number;
   success: boolean;
+  reason: FindReason;
+  /** Which axes moved to reach the target. Empty when nothing needed to move. */
+  axesAdjusted: FindAxis[];
+  /** Perceptual drift from the reference color, Delta E 2000. */
+  deltaE: number | null;
+  /**
+   * Present on `lightness-exhausted`: the least chroma sacrifice that *would*
+   * reach the target, the lightness it needs, and what it costs — reported
+   * without being applied, so a human can decide.
+   *
+   * Lightness is free here because it is always free; `--allow-desaturation`
+   * grants permission for chroma. Holding it fixed would enforce a constraint
+   * nobody asked for, and would cost more saturation, not less.
+   */
+  resolvableBy?: { chroma: number; lightness: number; deltaE: number | null };
   message?: string;
   oklch?: {
     l: number;
     c: number;
     h: number;
   };
+  /** Whether the reference color needed normalizing into the gamut, and to what. */
+  gamut: { outOfGamut: boolean; measured?: string };
 }

@@ -99,6 +99,8 @@ klar contrast <color1> <color2> [options]
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-t, --type <type>` | `okca` | Algorithm: `okca`, `wcag2`, `deltaE` (built-in), plus any installed plugins |
+| `--gamut-map <method>` | `css` | Out-of-gamut resolution — see [Out-of-gamut colors](#out-of-gamut-colors) |
+| `--allow-out-of-gamut` | off | Exit 0 instead of 1 when an input is outside the gamut |
 | `--json` | | JSON output |
 | `-q, --quiet` | | Print only the numeric contrast value |
 
@@ -116,14 +118,82 @@ Additional algorithms are available as optional plugins — see [PLUGINS.md](PLU
 
 ```jsonc
 {
-  "contrast": 20.9,         // number — the calculated value
-  "type": "okca",           // string — algorithm used
+  "contrast": 20.9,        // number — the calculated value
+  "type": "okca",          // string — algorithm used
   "colorOne": "#ffffff",   // string — first color as provided
-  "colorTwo": "#000000"    // string — second color as provided
+  "colorTwo": "#000000",   // string — second color as provided
+  "gamut": {
+    "map": "css",          // string — the mapping applied
+    "outOfGamut": false    // boolean — true if either color is outside sRGB
+  }
+}
+```
+
+When a color *is* outside the gamut, a `measured` object is added listing only
+the colors that were mapped, and the command **exits 1**:
+
+```jsonc
+{
+  "contrast": 6,
+  "type": "okca",
+  "colorOne": "oklch(0.79 0.22 25)",
+  "colorTwo": "#070e16",
+  "gamut": {
+    "map": "css",
+    "outOfGamut": true,
+    "measured": { "colorOne": "#ff938b" }   // what the figure was computed on
+  }
 }
 ```
 
 **Quiet output:** single number, e.g. `20.9`
+
+#### Out-of-gamut colors
+
+A color authored in OKLCH can sit outside the sRGB gamut. It has to be resolved
+to a displayable color before it can be measured, so the number describes that
+mapped equivalent — **not the color in your token file**. That is a real answer
+to a different question than the one asked, so the command **exits 1** rather
+than passing silently.
+
+```bash
+klar contrast "oklch(0.79 0.22 25)" "#070e16" -q
+# 6        exit 1 — measures #ff938b, the mapped equivalent
+
+klar contrast "oklch(0.79 0.22 25)" "#070e16" -q --allow-out-of-gamut
+# 6        exit 0 — same number, failure waived
+
+klar contrast "oklch(0.79 0.22 25)" "#070e16" -q --type wcag2 --gamut-map none
+# 9.2      the colorimetric value of the color as authored
+```
+
+klar resolves out-of-gamut colors with **CSS Color 4 gamut mapping** — chroma
+reduction until the color fits — everywhere it maps a color. klar takes no
+position on what any particular browser does: engines vary and change, and
+tracking them would mean maintaining an engine-and-version matrix indefinitely.
+The spec is a stable reference; an implementation is not.
+
+| `--gamut-map` | Behavior |
+|------|----------|
+| `css` *(default)* | CSS Color 4 chroma reduction |
+| `clip` | Clamp each channel into range — a well-defined operation, no claim about who performs it |
+| `none` | Measure the authored color, unmapped. Refused for `okca` and plugins, whose guarantees are established across the sRGB gamut |
+
+Two things worth holding onto:
+
+- **Reducing chroma will not move the number until the color is in gamut.**
+  Chroma reduction maps *every* out-of-gamut chroma at a given lightness and hue
+  onto the same boundary color, so `0.22 → 0.15` changes nothing. Reduce until
+  `outOfGamut` is false; only then does further reduction help.
+- **Two different tokens can produce the same figure.** Because of the above,
+  `gamut.outOfGamut` is the only thing distinguishing them in the output.
+
+`KLAR_GAMUT_MAP` sets the mapping process-wide — useful for pinning the previous
+behavior while migrating. There is deliberately **no environment variable** that
+waives the failure: a global mute gets set once in CI and never removed.
+
+Scripts using `-q` get the value on stdout, whether to trust it from the exit
+code, and which color was mapped from stderr. `--json` carries all three.
 
 **Examples:**
 
@@ -133,6 +203,7 @@ klar contrast "#fff" "#000" --type wcag2
 klar contrast "#fff" "#000" --type okca --json
 klar contrast "oklch(50% 0.2 240)" "#000" -q
 klar contrast "rgb(59,130,246)" "#ffffff" --type deltaE
+klar contrast "oklch(0.79 0.22 25)" "#070e16" --allow-out-of-gamut
 ```
 
 ---
@@ -378,17 +449,36 @@ klar lightness <color> [options]
 | `--json` | JSON output |
 | `-q, --quiet` | Print min and max space-separated |
 
+Exits `1` when the color's chroma is not renderable at any lightness.
+
 **JSON schema:**
 
 ```jsonc
 {
   "originalCoords": [0.623, 0.188, 259.81],  // [L, C, H] in OKLCH
-  "lightMin": 0.466,                          // number — minimum L in gamut
-  "lightMax": 0.648                           // number — maximum L in gamut
+  "lightMin": 0.466,                          // number|null — minimum L in gamut
+  "lightMax": 0.648,                          // number|null — maximum L in gamut
+  "gamut": { "outOfGamut": false }            // was the input renderable as given?
 }
 ```
 
-**Quiet output:** `min max` space-separated (4 decimal places), e.g. `0.4660 0.6480`
+**When no lightness renders at all**, the bounds are `null` and the command
+**exits 1**. `oklch(0.5 0.9 25)` is not displayable at any lightness, so there is
+no range to report — and reporting one would be a confident, specific, false
+answer to the question the command exists to answer:
+
+```jsonc
+{ "originalCoords": [0.5, 0.9, 25], "lightMin": null, "lightMax": null,
+  "gamut": { "outOfGamut": true } }
+```
+
+The reported range can legitimately *exclude* the input's own lightness:
+`oklch(0.45 0.22 25)` is not renderable at L=0.45, but the same chroma and hue do
+render between 0.543 and 0.667. That band is the honest answer for a color whose
+authored lightness does not work.
+
+**Quiet output:** `min max` space-separated (4 decimal places), e.g. `0.4660 0.6480`.
+Nothing is printed when there is no range; the exit code and stderr carry it.
 
 **Examples:**
 
@@ -420,6 +510,7 @@ klar find <base-color> <reference-color> [options]
 | `--target <n>` | *(required)* | Target contrast value |
 | `-t, --type <type>` | `okca` | Algorithm: `okca`, `wcag2`, `deltaE` (built-in), plus any installed plugins |
 | `--tolerance <n>` | `0.5` | Acceptable overshoot above the target — the band within which the search stops early. Never accepts a result below the target. |
+| `--allow-desaturation` | off | Permit reducing chroma to reach the target |
 | `--json` | | JSON output |
 | `-q, --quiet` | | Print only the adjusted hex color |
 
@@ -427,22 +518,80 @@ klar find <base-color> <reference-color> [options]
 
 ```jsonc
 {
-  "adjustedColor": "#2563eb",    // string — result hex
+  "adjustedColor": "#2563eb",    // string — result hex, always renderable
   "actualContrast": 4.6,         // number — achieved contrast (of adjustedColor)
   "iterations": 10,              // number — binary search steps
   "success": true,               // boolean — true when actualContrast >= target
-  "message": "",                 // string? — explanation if failed
+  "reason": "ok",                // string — branch on this, never on `message`
+  "axesAdjusted": ["lightness"], // string[] — what moved to reach the target
+  "deltaE": 3,                   // number — perceptual drift from the reference
+  "message": "",                 // string? — human prose; wording is not stable
   "oklch": {                     // object? — OKLCH of adjusted color
     "l": 0.523,
     "c": 0.188,
     "h": 259.8
+  },
+  "gamut": {                     // object — was the reference renderable as given?
+    "outOfGamut": false
   }
 }
 ```
 
-When `success` is `false` the target is unachievable by adjusting lightness
-alone: `adjustedColor` holds the **closest reachable** color, `message` explains
-why, and the command **exits 1** (see [Exit Codes](#exit-codes)).
+**`reason`** is the machine-readable outcome:
+
+| Value | Meaning |
+|-------|---------|
+| `ok` | Target met |
+| `lightness-exhausted` | Desaturation was not permitted and lightness alone fell short. A fix exists — see `resolvableBy` |
+| `unreachable` | The target is above the contrast ceiling for this base. No color meets it; the base has to change |
+| `chroma-exhausted` | Defensive: no chroma at any lightness reached a target that should have been reachable |
+
+When `success` is `false` the command **exits 1** (see [Exit Codes](#exit-codes))
+and `adjustedColor` holds the **closest reachable** color — always renderable,
+never the input echoed back. On `lightness-exhausted` the payload also carries
+**`resolvableBy`**: what would solve it, reported *without* being applied.
+
+```jsonc
+{
+  "success": false,
+  "reason": "lightness-exhausted",
+  "adjustedColor": "#a9000b",              // closest reachable, still renderable
+  "actualContrast": 6,
+  "resolvableBy": {
+    "chroma": 0.149,                       // the least saturation sacrifice that works
+    "lightness": 0.365,                    // the lightness it needs
+    "deltaE": 10                           // what it costs, perceptually
+  }
+}
+```
+
+#### Chroma: normalized always, traded never (unless you say so)
+
+Two chroma operations are involved, and only one is optional.
+
+**Gamut normalization is mandatory.** An out-of-gamut reference is chroma-reduced
+onto the gamut boundary before the search begins, because otherwise there is no
+renderable color to return. It is reported under `gamut` and on stderr, never as
+an entry in `axesAdjusted` — it is not something you chose to trade.
+
+**Target-reaching desaturation is off by default.** Once the color is renderable,
+only lightness moves. Trading brand saturation for contrast is a design decision,
+not a computation, so when lightness runs out `find` exits 1 and quotes the fix
+rather than applying it:
+
+```bash
+klar find "oklch(1 0 0)" "oklch(0.45 0.22 25)" --target 9.5
+# → chroma 0.149 at lightness 0.365 would reach the target (10 ΔE from the reference)
+#   Apply with --allow-desaturation, or take it to a human.
+
+klar find "oklch(1 0 0)" "oklch(0.45 0.22 25)" --target 9.5 -q --allow-desaturation
+# #7a0005     exit 0
+```
+
+`--allow-desaturation` runs the identical search, so the quote and the fix cannot
+disagree. The search keeps as much chroma as possible first, then moves lightness
+as little as possible — lightness is free to move because adjusting it is what
+`find` does; the flag grants permission for *chroma*.
 
 **Quiet output:** adjusted hex, e.g. `#2563eb`. On a soft failure the closest
 color is still printed, but the command exits `1` — so `$(klar find … -q)`
@@ -646,8 +795,17 @@ klar follows a grep-style convention so scripts can branch on the outcome:
 | Code | Meaning |
 |------|---------|
 | `0` | Success — the operation produced a satisfying result (also `--help` and `--version`) |
-| `1` | Soft failure — a valid operation whose answer is negative (`find` target unachievable, `match` infeasible) |
+| `1` | Soft failure — a valid operation whose answer is negative |
 | `2` | Usage error — invalid input, unknown flag or command, or a missing argument |
+
+Soft failures (`1`) are:
+
+| Command | Condition |
+|---------|-----------|
+| `contrast` | An input is outside the gamut, so the figure describes a mapped equivalent rather than the color you asked about. Waive with `--allow-out-of-gamut` |
+| `find` | Target unachievable under the constraints given — see `reason` |
+| `lightness` | The color's chroma is not renderable at any lightness, so there is no range |
+| `match` | No in-gamut chroma match exists |
 
 `2` covers both an unusable *value* (`klar contrast notacolor "#000"`) and an
 unusable *invocation* (`klar find "#fff" "#000"` with no `--target`, a
@@ -659,14 +817,43 @@ always means "klar understood you, and the answer is no." Most carry an
 help text to stderr instead. Match on the exit code, not the message.
 
 On a soft failure (`1`) the result payload is still written to **stdout** —
-`find` prints the closest reachable color, `--json` reports `"success": false`
-— so the exit code guards a pipeline while the data remains inspectable:
+`find` prints the closest reachable color, `contrast` prints the number it
+measured, `--json` reports `"success": false` — so the exit code guards a
+pipeline while the data remains inspectable:
 
 ```bash
 # Apply only when a compliant color was actually found
 ADJUSTED=$(klar find "$BG" "$FG" --target 4.5 -q) && apply "$ADJUSTED" \
   || echo "no color meets the target on this background"
+
+# Gate on trustworthiness as well as value: exit 1 here means the number
+# describes a mapped equivalent, not the token as authored
+OKCA=$(klar contrast "$FG" "$BG" -q) || echo "warning: $FG is outside sRGB"
 ```
+
+The one exception to "stdout carries the payload" is `lightness` with `-q` when
+no range exists — there are no numbers to print, and printing a pair would be
+the defect this replaced. The exit code and stderr carry it.
+
+### `set -e` and out-of-gamut input
+
+Under `set -e`, a bare assignment aborts the script the first time `contrast`
+meets an out-of-gamut color — leaving a *partial* result on stdout that reads
+like a complete short run. Guard the assignment when auditing colors you
+supply:
+
+```bash
+for T in "${TOKENS[@]}"; do
+  if OKCA=$(klar contrast "$T" "$BG" -q); then
+    echo "$T -> $OKCA"
+  else
+    echo "$T -> $OKCA  (outside sRGB — figure describes the mapped color)"
+  fi
+done
+```
+
+Colors klar *produces* — `variants` cells, `find` results, `match` output — are
+in gamut by construction and never trigger this.
 
 ---
 

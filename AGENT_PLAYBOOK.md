@@ -56,6 +56,92 @@ color. Use `lightness` to find the actual L range for a given C and H.
 The adaptive `variants` grid already handles this — every cell it emits
 is in-gamut.
 
+**A mapped measurement is not a measurement of what you authored.**
+A color outside sRGB has to be resolved to a displayable one before it
+can be measured, so the number describes that mapped equivalent — not
+the color in the token file. `contrast` **exits 1** to say so.
+
+```bash
+OKCA=$(klar contrast "$FG" "$BG" -q) || echo "$FG is outside sRGB"
+```
+
+**Guard the assignment when auditing authored tokens.** Under `set -e` —
+normal in CI — a bare `OKCA=$(klar contrast ...)` aborts the script at
+the first out-of-gamut token, leaving a partial audit on stdout that
+reads like a short token set rather than a truncated run:
+
+```bash
+for T in "${TOKENS[@]}"; do
+  if OKCA=$(klar contrast "$T" "$BG" -q); then
+    echo "  $T -> $OKCA"
+  else
+    echo "  $T -> $OKCA  (outside sRGB — figure describes the mapped color)"
+  fi
+done
+```
+
+The guarded form is better output regardless: it separates "measured
+cleanly" from "measured a mapped equivalent" inline, which a bare number
+cannot.
+
+This only applies to colors *you* supply. Colors klar produces —
+`variants` cells, `find` results, `match` output — are in gamut by
+construction and never trigger it, so the loops later in this playbook
+need no guard.
+
+Two things follow when auditing tokens authored in OKLCH:
+
+- **Reducing chroma will not move the number until the color is in
+  gamut.** Chroma reduction maps every out-of-gamut chroma at a given
+  lightness and hue onto the same boundary color, so `0.22 → 0.15`
+  changes nothing at all. Reduce until the exit code is 0; only then
+  does further reduction help. Two different tokens can otherwise report
+  an identical figure, and `gamut.outOfGamut` is the only thing telling
+  them apart.
+- **`find` resolves this for you.** It normalizes an out-of-gamut
+  reference into the gamut before searching, so it never hands back a
+  color that cannot be displayed.
+
+Pass `--allow-out-of-gamut` when a mapped figure is acceptable, and
+`--gamut-map none --type wcag2` for the colorimetric value of the color
+as authored. Neither describes a color anyone can display.
+
+**Exit codes are the primary signal.** Read them before reading values.
+
+| Code | Meaning | What to do |
+|------|---------|------------|
+| 0 | The value describes the color you asked about | Proceed |
+| 1 | Valid operation, negative answer | Read `reason` / `gamut`; do not adopt the value blindly |
+| 2 | Usage error, or klar declined to answer | Fix the call; do not retry with different flags to make it go away |
+
+**Pick the output mode for the job.** Every byte is a token, paid on
+every call.
+
+| Job | Mode | Why |
+|-----|------|-----|
+| Gate — "does this pass?" | `-q` + `$?` | The float answers it; the exit code says whether to trust the float |
+| Audit — "why, and what do I do?" | `--json` | You need `reason`, `resolvableBy`, `gamut.measured` |
+
+**Never resolve a brand tradeoff unilaterally.** When `find` reports
+`reason: "lightness-exhausted"` it has found a compliant color but one
+that costs saturation, and it deliberately has *not* applied it:
+
+```bash
+RESULT=$(klar find "$BG" "$FG" --target 4.5 --json)
+case "$(jq -r '.reason' <<<"$RESULT")" in
+  ok)                   ;;   # done
+  lightness-exhausted)       # a fix exists; report it with its price
+    jq -r '.resolvableBy' <<<"$RESULT"   # { chroma, lightness, deltaE }
+    ;;
+  unreachable)          ;;   # no color works against this base; change the base
+esac
+```
+
+Report it with the `deltaE` cost attached and let a human decide.
+`--allow-desaturation` exists for pipelines where that decision has
+already been made. Branch on `reason`, never on `message` — the prose
+wording is not stable.
+
 ---
 
 ## Workflow 1 — Build a palette from a hero color
@@ -152,10 +238,11 @@ done
 ### Step 2: Find dark-mode equivalents
 
 For each color, find a version that meets contrast against the dark
-background. `find <base> <reference>` keeps `base` fixed and adjusts
-the `reference` color's OKLCH lightness — chroma and hue are preserved.
-Pass the background as `base` and the original foreground as
-`reference`:
+background. `find <base> <reference>` keeps `base` fixed and adjusts the
+`reference` color's OKLCH lightness. Hue is always preserved; chroma is
+only reduced if the reference is not displayable, or if you pass
+`--allow-desaturation`. Pass the background as `base` and the original
+foreground as `reference`:
 
 ```bash
 DARK_BG="#1a1a2e"
@@ -167,21 +254,34 @@ Internally `find` evaluates OKCA as `(adjusted-foreground, background)`,
 so the `actualContrast` in the result corresponds to the polarity the
 adjusted color will be used in.
 
-**`find` moves lightness only — check `success` before using the
-result.** A saturated color has a narrow in-gamut lightness band, and
-`find` cannot leave it. The command above is one of those cases:
+**By default `find` moves lightness only — check `reason` before using
+the result.** A saturated color has a narrow in-gamut lightness band. The
+command above is one of those cases:
 
 ```jsonc
 {
   "adjustedColor": "#438aff",
   "actualContrast": 2.2,
-  "success": false,          // 4.5 unreachable — exit code is 1
-  "message": "Target contrast 4.5 not achievable by adjusting lightness only (closest reached: 2.2). ..."
+  "success": false,               // 4.5 not reached — exit code is 1
+  "reason": "lightness-exhausted",
+  "axesAdjusted": [],
+  "deltaE": 3,
+  "resolvableBy": {               // a fix exists, quoted but NOT applied
+    "chroma": 0.128,
+    "lightness": 0.743,
+    "deltaE": 13
+  }
 }
 ```
 
+`resolvableBy` says a compliant color exists at chroma 0.128 — but at 13
+deltaE from the original, which is "clearly different" on the scale
+above. That is a brand decision, so klar quotes it rather than taking
+it. Report the cost and let a human choose, or pass
+`--allow-desaturation` if that choice is already made.
+
 `klar find` still prints its closest attempt on failure, so never apply
-the output without checking `success` (or the exit code).
+the output without checking the exit code.
 
 Diagnose it with `lightness`, which reports the sRGB-displayable L range
 at that color's chroma and hue:
@@ -189,6 +289,7 @@ at that color's chroma and hue:
 ```bash
 klar lightness "$ORIGINAL" --json
 # { "lightMin": 0.466, "lightMax": 0.648, ... }
+# Exits 1 with null bounds when the chroma is not renderable at any lightness.
 ```
 
 Blue at chroma 0.188 can only live between L 0.466 and L 0.648 — there
