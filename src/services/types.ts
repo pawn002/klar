@@ -94,11 +94,15 @@ export interface TargetContrastResult {
   /** Perceptual drift from the reference color, Delta E 2000. */
   deltaE: number | null;
   /**
-   * Present on `lightness-exhausted`: the chroma that *would* reach the target
-   * at the reference color's original lightness, and what it costs — reported
+   * Present on `lightness-exhausted`: the least chroma sacrifice that *would*
+   * reach the target, the lightness it needs, and what it costs — reported
    * without being applied, so a human can decide.
+   *
+   * Lightness is free here because it is always free; `--allow-desaturation`
+   * grants permission for chroma. Holding it fixed would enforce a constraint
+   * nobody asked for, and would cost more saturation, not less.
    */
-  resolvableBy?: { chroma: number; deltaE: number | null };
+  resolvableBy?: { chroma: number; lightness: number; deltaE: number | null };
   message?: string;
   oklch?: {
     l: number;

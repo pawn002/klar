@@ -163,7 +163,7 @@ export function formatFind(data: {
   reason?: string;
   axesAdjusted?: string[];
   deltaE?: number | null;
-  resolvableBy?: { chroma: number; deltaE: number | null };
+  resolvableBy?: { chroma: number; lightness: number; deltaE: number | null };
   message?: string;
   oklch?: { l: number; c: number; h: number };
   gamut?: { outOfGamut: boolean; measured?: string };
@@ -201,7 +201,8 @@ export function formatFind(data: {
   // decision, so it is quoted with its price rather than quietly applied.
   if (data.resolvableBy) {
     lines.push(
-      `  → chroma ${data.resolvableBy.chroma.toFixed(3)} would reach the target` +
+      `  → chroma ${data.resolvableBy.chroma.toFixed(3)} at lightness ` +
+        `${data.resolvableBy.lightness.toFixed(3)} would reach the target` +
         (typeof data.resolvableBy.deltaE === 'number'
           ? ` (${data.resolvableBy.deltaE} ΔE from the reference)`
           : ''),

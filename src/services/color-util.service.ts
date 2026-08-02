@@ -635,36 +635,72 @@ export class ColorUtilService {
   }
 
   /**
-   * The least desaturation that reaches the target at a fixed lightness and hue.
+   * The least desaturation that reaches the target, at whatever lightness that
+   * requires.
    *
-   * Walks chroma downward from `maxChroma` and returns the first value that
-   * meets the target, which is the largest — i.e. the smallest sacrifice of
-   * saturation that works. A stepped walk rather than a bisection because
-   * contrast is not guaranteed monotonic in chroma for every hue and base, and
-   * the range is small enough that robustness is worth more than speed.
+   * Two nested objectives, in order:
+   *
+   *  1. **Keep as much chroma as possible.** Chroma is brand intent, so the walk
+   *     starts at the working chroma and steps down, taking the first level that
+   *     works anywhere.
+   *  2. **Move lightness as little as possible.** At each chroma the lightness
+   *     scan walks outward from the reference, so the first hit is the nearest.
+   *
+   * Lightness is free to move here because it is always free to move — adjusting
+   * it is what `find` does. `--allow-desaturation` grants permission for
+   * *chroma*, and pinning the chroma search to a single lightness would enforce
+   * a constraint nobody asked for. It also costs saturation rather than saving
+   * it: more room in lightness means less chroma has to be given up. On
+   * `oklch(0.79 0.22 25)` against `#070e16` at target 8, holding lightness fixed
+   * needs chroma 0.086, while allowing it to move keeps 0.106.
+   *
+   * A stepped walk rather than a bisection because contrast is not guaranteed
+   * monotonic in chroma for every hue and base.
+   *
+   * Callers must check the contrast ceiling first. Given a target at or below
+   * it, this always finds something — chroma 0 is the achromatic ramp, whose
+   * maximum contrast against any base *is* the ceiling — so the exhaustive
+   * no-solution scan never actually runs.
    */
   private searchChroma(params: {
     baseColor: string;
-    lightness: number;
+    referenceLightness: number;
     hue: number;
     maxChroma: number;
     targetContrast: number;
     contrastType: string;
     gamut: GamutMode;
-  }): { chroma: number; contrast: number; hex: string } | null {
-    const { baseColor, lightness, hue, maxChroma, targetContrast, contrastType, gamut } = params;
-    const STEP = 0.002;
+  }): { chroma: number; lightness: number; contrast: number; hex: string } | null {
+    const { baseColor, referenceLightness, hue, maxChroma } = params;
+    const { targetContrast, contrastType, gamut } = params;
+    const C_STEP = 0.002;
+    const L_STEP = 0.005;
 
-    for (let c = maxChroma; c >= -STEP; c -= STEP) {
-      const chroma = Math.max(0, c);
+    const evaluate = (lightness: number, chroma: number) => {
+      if (lightness < 0 || lightness > 1) return null;
       const candidate = new Color('oklch', [lightness, chroma, hue]);
-      if (!candidate.inGamut('srgb')) continue;
-
+      if (!candidate.inGamut('srgb')) return null;
       const hex = candidate.to('srgb').toString({ format: 'hex' });
       const contrast = this.calculateContrastByType(hex, baseColor, contrastType, gamut);
-      if (contrast !== null && Math.abs(contrast) >= targetContrast) {
-        return { chroma, contrast, hex };
+      if (contrast === null || Math.abs(contrast) < targetContrast) return null;
+      return { chroma, lightness, contrast, hex };
+    };
+
+    for (let c = maxChroma; c >= -C_STEP; c -= C_STEP) {
+      const chroma = Math.max(0, c);
+
+      // Outward from the reference, so the first hit is the smallest move.
+      for (let offset = 0; offset <= 1; offset += L_STEP) {
+        const candidates =
+          offset === 0
+            ? [referenceLightness]
+            : [referenceLightness - offset, referenceLightness + offset];
+        for (const lightness of candidates) {
+          const hit = evaluate(lightness, chroma);
+          if (hit) return hit;
+        }
       }
+
       if (chroma === 0) break;
     }
     return null;
@@ -770,23 +806,27 @@ export class ColorUtilService {
       };
     }
 
-    // --- Step 3: what would chroma do, at the *original* lightness? ---------
-    // Quoted against the lightness the author chose, not the one the search
-    // drifted to — "keep your lightness, drop chroma to X" is actionable in a
-    // way a figure against an unfamiliar lightness is not. `--allow-desaturation`
-    // searches from the same starting point so the two agree on the cost.
-    const viaChroma = this.searchChroma({
-      baseColor,
-      lightness: originalLightness,
-      hue,
-      maxChroma: workingChroma,
-      targetContrast,
-      contrastType,
-      gamut,
-    });
+    // --- Step 3: what would giving up some chroma buy? ----------------------
+    // Only worth asking when the target is reachable at all. Below the ceiling
+    // the chroma search always finds something, so this check is what keeps the
+    // exhaustive scan from ever running.
+    const ceiling = this.contrastCeiling(baseColor, contrastType, gamut);
+    const viaChroma =
+      targetContrast <= ceiling
+        ? this.searchChroma({
+            baseColor,
+            referenceLightness: originalLightness,
+            hue,
+            maxChroma: workingChroma,
+            targetContrast,
+            contrastType,
+            gamut,
+          })
+        : null;
 
     if (allowDesaturation && viaChroma) {
       const axes: FindAxis[] = ['chroma'];
+      if (Math.abs(viaChroma.lightness - normalizedLightness) > 1e-6) axes.push('lightness');
       return {
         adjustedColor: viaChroma.hex,
         actualContrast: viaChroma.contrast,
@@ -795,18 +835,20 @@ export class ColorUtilService {
         reason: 'ok',
         axesAdjusted: axes,
         deltaE: driftFrom(viaChroma.hex),
-        oklch: { l: originalLightness, c: viaChroma.chroma, h: hue },
+        oklch: { l: viaChroma.lightness, c: viaChroma.chroma, h: hue },
         gamut: gamutReport,
       };
     }
 
     // --- Failure. Say which constraint bound the search. --------------------
-    const ceiling = this.contrastCeiling(baseColor, contrastType, gamut);
     const reason: FindReason =
       targetContrast > ceiling
         ? 'unreachable'
         : allowDesaturation
-          ? 'chroma-exhausted'
+          ? // Defensive: below the ceiling the achromatic ramp always reaches the
+            // target, so this only fires if step granularity stepped over a very
+            // narrow solution band.
+            'chroma-exhausted'
           : 'lightness-exhausted';
 
     // Always renderable: normalization ran before the search, so the worst case
@@ -828,12 +870,10 @@ export class ColorUtilService {
           : `Target contrast ${targetContrast} not reachable by lightness alone ` +
             `(closest: ${Math.abs(fallback.contrast)}).` +
             (viaChroma
-              ? ` Reducing chroma to ${viaChroma.chroma.toFixed(3)} would reach it — ` +
-                `pass --allow-desaturation to apply that.`
-              : ` Chroma reduction at this lightness does not reach it either ` +
-                `(the target is below what this base allows, so a combination of ` +
-                `lower chroma and a different lightness may exist — klar moves one ` +
-                `axis at a time and will not find it).`);
+              ? ` Reducing chroma to ${viaChroma.chroma.toFixed(3)} at lightness ` +
+                `${viaChroma.lightness.toFixed(3)} would reach it — pass ` +
+                `--allow-desaturation to apply that.`
+              : ` No chroma reaches it either.`);
 
     return {
       adjustedColor: fallback.hex,
@@ -844,7 +884,13 @@ export class ColorUtilService {
       axesAdjusted: [],
       deltaE: driftFrom(fallback.hex),
       ...(reason === 'lightness-exhausted' && viaChroma
-        ? { resolvableBy: { chroma: viaChroma.chroma, deltaE: driftFrom(viaChroma.hex) } }
+        ? {
+            resolvableBy: {
+              chroma: viaChroma.chroma,
+              lightness: viaChroma.lightness,
+              deltaE: driftFrom(viaChroma.hex),
+            },
+          }
         : {}),
       message,
       oklch: { l: fallback.l, c: workingChroma, h: hue },

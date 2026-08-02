@@ -83,12 +83,21 @@ describe('find (issue #9 knock-on)', () => {
       expect(applied.oklch!.c).toBeCloseTo(escalated.resolvableBy!.chroma, 6);
     });
 
-    it('quotes and applies at the reference lightness, not a drifted one', () => {
-      // The two must agree on the cost, which they only do if both search from
-      // the same starting point.
-      const [refL] = new Color('oklch(0.79 0.22 25)').to('oklch').coords.map(Number);
-      expect(applied.oklch!.l).toBeCloseTo(refL, 6);
+    it('quote and fix agree on the lightness as well as the cost', () => {
+      // Both run the same search, so they cannot disagree about what the fix is
+      // or what it costs.
+      expect(applied.oklch!.l).toBeCloseTo(escalated.resolvableBy!.lightness, 6);
       expect(applied.deltaE).toBe(escalated.resolvableBy!.deltaE);
+    });
+
+    it('keeps more chroma by letting lightness move', () => {
+      // Lightness is always free to move — adjusting it is what `find` does, and
+      // `--allow-desaturation` grants permission for *chroma*. Pinning the
+      // chroma search to one lightness enforces a constraint nobody asked for,
+      // and costs saturation rather than saving it: on this pair, holding
+      // lightness fixed needs chroma 0.086 where letting it move keeps 0.106.
+      const heldFixed = 0.086;
+      expect(applied.oklch!.c).toBeGreaterThan(heldFixed);
     });
 
     it('records chroma as an adjusted axis', () => {
@@ -97,6 +106,35 @@ describe('find (issue #9 knock-on)', () => {
 
     it('meets the target it was given', () => {
       expect(Math.abs(applied.actualContrast)).toBeGreaterThanOrEqual(target);
+    });
+  });
+
+  describe('the case issue #9 was filed about', () => {
+    // `find "oklch(1 0 0)" "oklch(0.45 0.22 25)" --target 9.5` returned the
+    // input unchanged at exit 1. At the reference's own lightness contrast tops
+    // out at 6.4 even at chroma 0, so no single-axis move solves it — but
+    // C≈0.15 at L≈0.37 reaches 9.5.
+    const base = 'oklch(1 0 0)';
+    const ref = 'oklch(0.45 0.22 25)';
+
+    it('is reported as resolvable rather than as a dead end', () => {
+      const result = run(base, ref, 9.5);
+      expect(result.reason).toBe('lightness-exhausted');
+      expect(result.resolvableBy).toBeDefined();
+      expect(result.resolvableBy!.lightness).toBeLessThan(0.45);
+    });
+
+    it('is solved when desaturation is permitted', () => {
+      const result = run(base, ref, 9.5, true);
+      expect(result.success).toBe(true);
+      expect(Math.abs(result.actualContrast)).toBeGreaterThanOrEqual(9.5);
+      expect(result.axesAdjusted).toEqual(expect.arrayContaining(['chroma', 'lightness']));
+    });
+
+    it('returns a renderable color, never the unusable input', () => {
+      const result = run(base, ref, 9.5, true);
+      expect(new Color(result.adjustedColor).inGamut('srgb')).toBe(true);
+      expect(result.adjustedColor).not.toBe(ref);
     });
   });
 
