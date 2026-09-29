@@ -106,7 +106,8 @@ await Promise.all(Array.from({ length: parallel }, async () => {
 }));
 out.sort((a, b) => (a.run + a.id).localeCompare(b.run + b.id));
 fs.mkdirSync(path.join(HERE, "review"), { recursive: true });
-const logFile = path.join(HERE, "review", `judge-${model}.jsonl`);
+const tag = opt("tag", "");
+const logFile = path.join(HERE, "review", `judge-${model}${tag ? "-" + tag : ""}.jsonl`);
 fs.writeFileSync(logFile, out.map((o) => JSON.stringify(o)).join("\n") + "\n");
 
 const judged = out.filter((o) => o.judge);

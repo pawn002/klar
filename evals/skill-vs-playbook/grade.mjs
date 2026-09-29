@@ -87,7 +87,7 @@ export function commonSignals(t, arm) {
 // ---------- helpers ----------
 
 const WHITE = /^#(fff|ffffff)$|^white$/i;
-const FAIL_WORDS = /\b(fails?|failing|(does|do) ?n[o’']t (quite |fully )?(pass|meet|work|clear|reach)|just short|not (meet|pass|sufficient|enough|compliant|accessible)|below|insufficient|falls? short|won[’']t work|no longer (passes|works|meets))\b/i;
+const FAIL_WORDS = /\b(fails?|failing|(does|do) ?n[o’']t (quite |fully )?(pass|meet|work|clear|reach)|just short|not (meet|pass|sufficient|enough|compliant|accessible)|below|insufficient|falls? short|won[’']t (work|pass|meet)|\d(\.\d+)? points? short|no longer (passes|works|meets))\b/i;
 const hexesIn = (s) => [...new Set((s.match(/#[0-9a-f]{6}\b|#[0-9a-f]{3}\b/gi) ?? []).map((h) => h.toLowerCase()))];
 const colorArgs = (cmd) => (cmd.match(/#[0-9a-fA-F]{3,8}\b|\bwhite\b|oklch\([^)]*\)/g) ?? []);
 
@@ -124,9 +124,13 @@ const graders = {
     // Algorithm-consistent scoring (decided 2026-09-29, see DESIGN changelog):
     // an agent that chooses --type wcag2 and says "passes, 5.6" is correct under
     // WCAG 2.x. What T1 tests is polarity, which only exists for OKCA.
+    // Parse each `klar contrast` invocation on its own: agents chain commands
+    // (`klar find BG FG … && klar contrast "$(…)"`), and `find` takes the
+    // background first by design.
     const pair = klarCmds(t)
-      .filter((u) => /\bcontrast\b/.test(u.cmd))
-      .map((u) => ({ args: colorArgs(u.cmd).map((c) => c.toLowerCase()), wcag2: /(--type|-t)\s+wcag2/i.test(u.cmd) }))
+      // Command substitutions are values, not arguments: `$(klar find BG FG)` is one color.
+      .flatMap((u) => [...u.cmd.replace(/\$\([^()]*\)/g, "SUBST").matchAll(/klar\s+contrast\s+([^|;&]*)/g)].map((m) => m[1]))
+      .map((seg) => ({ args: colorArgs(seg).map((c) => c.toLowerCase()), wcag2: /(--type|-t)\s+wcag2/i.test(seg) }))
       .filter(({ args }) => args.includes("#0055ff") && args.some((a) => WHITE.test(a)));
     const okcaCmds = pair.filter((c) => !c.wcag2);
     const wrongOrder = okcaCmds.some(({ args: [a, b] }) => WHITE.test(a) && b === "#0055ff");
@@ -186,7 +190,8 @@ const graders = {
       });
       return blocks.join("\n");
     };
-    const gamutFlag = /gamut|srgb|mapped|out.of.range/i;
+    // ERROR / N/A count: they mark the token as not cleanly measured (round 2).
+    const gamutFlag = /gamut|srgb|mapped|out.of.range|\berror\b|n\/a/i;
     const flagged = ["success", "danger"].filter((k) => gamutFlag.test(lineFor(k)));
     const usesSetE = /set -[a-z]*e/.test(fs.readFileSync(script, "utf8"));
     const pass = usesSetE && reported.length === tokens.length && flagged.length === 2;

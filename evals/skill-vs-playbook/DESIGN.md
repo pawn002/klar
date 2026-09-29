@@ -282,3 +282,41 @@ Fixed now, so the result can't pick its own threshold later:
     ship the thin skill (the decision rule's preferred outcome). If A4 ≈ A1,
     the content has to live in the skill. (2) Does naming klar close the gap
     between A1 and A3?
+- **2026-09-29, round 2 result (Haiku 4.5, n=3 per cell, 45 trials, $2.83
+  at list price, plus $1.82 for the judge).**
+  - **Grader fixes found by auditing round 2** (all nine runs regraded; no
+    pilot verdict changed):
+    - T1 now parses each `klar contrast` call separately and strips `$(…)`
+      substitutions. A chained `find BG FG && contrast "$(find …)"` had been
+      read as reversed argument order.
+    - "won't pass" and "N points short" added to the failure words.
+    - T4 counts `ERROR` or `N/A` on an out-of-gamut token as flagging it.
+      Two scripts marked exactly those tokens that way without saying
+      "gamut". Disclosed as an interpretation of the rule.
+  - **Judge:** 36/36 first-pass agreement. Independent this time, because
+    the fixes above came from the author's audit before the judge ran.
+  - **Results across both rounds (pass / guidance loaded):**
+    A0 7/15; A1 6/15, 0/15; A3 12/15, 14/15; A4 12/15, 15/15;
+    A1-explicit 9/15, 0/15; A3-explicit 10/15, 11/15.
+  - **Decision rule, applied as written.**
+    - A4 (and A3) beat A1 on implicit phrasing by 40 points (≥15 ✓).
+    - A3-explicit is not worse than A1-explicit (10/15 vs 9/15) ✓. A4 was
+      not run on explicit phrasing, so that condition is checked on A3 only.
+    - A4 ≈ A3 (12/15 each) → per the rule, **ship A4**, the thin skill
+      pointing at the playbook.
+  - **Strength of evidence (two-sided Fisher exact).**
+    - Discovery gap, A4 vs A1 loading guidance (15/15 vs 0/15):
+      p = 1.3e-8.
+    - Pass rate, A4 vs A1 (12/15 vs 6/15): p = 0.06, suggestive rather
+      than conclusive at n=15.
+    - Outcome tasks alone, A4 vs A1 (9/9 vs 6/9): p = 0.21.
+    - Explicit phrasing, A3 vs A1 (10/15 vs 9/15): p = 1.0.
+  - **Observations for the write-up:**
+    - Naming klar in the prompt raised A1's outcome score from 6/9 to 9/9,
+      yet the playbook was still never opened, and method stayed 0/6.
+    - With "use klar" in the prompt, A3's skill fired less often (14 → 11
+      of 15). All four trials where it didn't fire failed.
+    - T6 stopped discriminating between arms: 0/9 in round 2. Agents that
+      found both matched colors failing 3:1 went on to fix them, which the
+      method rule scores as a failure. The T6 rule should be revisited
+      before any further round.
