@@ -266,3 +266,19 @@ Fixed now, so the result can't pick its own threshold later:
   - Net effect on the pilot: T2 is now A0 1/3, A1 1/3, A3 3/3.
     Overall: A0 7/15, A1 6/15, A3 12/15. Outcome tasks: A0 4/9, A1 6/9,
     A3 8/9.
+- **2026-09-29, round 2 plan (fixed before any round-2 trial).**
+  - **Cells:** A4 (thin skill → playbook) on implicit phrasing, and A1 and A3
+    on explicit phrasing. The explicit runs supply the decision rule's
+    "no regression on explicit phrasing" condition, which the pilot never
+    ran. Same five tasks, Haiku 4.5, n=3 per cell, 45 trials.
+  - **Graders frozen** at the version validated in the pilot, including the
+    judge-driven fixes. Round-2 verdicts are graded with them unchanged. Any
+    grader bug found in round 2 is logged and fixed, and *all* rounds are
+    regraded, so arms stay comparable.
+  - **Judge check:** the same blind Opus judge runs on round 2's prose-read
+    verdicts, and first-pass agreement is reported.
+  - **What round 2 answers:** (1) Is the skill's value in *triggering* or in
+    *content*? A4 triggers like A3 but carries only a pointer. If A4 ≈ A3,
+    ship the thin skill (the decision rule's preferred outcome). If A4 ≈ A1,
+    the content has to live in the skill. (2) Does naming klar close the gap
+    between A1 and A3?

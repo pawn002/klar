@@ -17,6 +17,8 @@ const rows = runs.flatMap((r) =>
   fs.readFileSync(rowsFile(r), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)),
 );
 
+// A cell is an arm plus its phrasing when an arm ran in more than one phrasing.
+for (const r of rows) r.arm = r.arm + (r.arm !== "A0" && r.phrasing === "explicit" ? "-explicit" : "");
 const ok = rows.filter((r) => r.status === "ok");
 const infra = rows.length - ok.length;
 const arms = [...new Set(ok.map((r) => r.arm))].sort();
@@ -39,7 +41,7 @@ for (const a of arms) {
   const ra = ok.filter((r) => r.arm === a);
   console.log([
     a,
-    a === "A0" ? "n/a" : frac(ra, (r) => r.common.guidanceLoaded),
+    a.startsWith("A0") ? "n/a" : frac(ra, (r) => r.common.guidanceLoaded),
     frac(ra, (r) => r.common.klarCalls > 0),
     frac(ra, (r) => r.common.contaminated),
     (sum(ra, (r) => r.common.turns) / ra.length).toFixed(1),
@@ -49,7 +51,7 @@ for (const a of arms) {
 
 // Outcome split by whether guidance was loaded: separates discovery from application.
 console.log("\nPass rate split by guidance loaded (A1/A3)");
-for (const a of arms.filter((x) => x !== "A0")) {
+for (const a of arms.filter((x) => !x.startsWith("A0"))) {
   const ra = ok.filter((r) => r.arm === a);
   console.log(`${a}\tloaded ${frac(ra.filter((r) => r.common.guidanceLoaded), (r) => r.pass)}\tnot loaded ${frac(ra.filter((r) => !r.common.guidanceLoaded), (r) => r.pass)}`);
 }
