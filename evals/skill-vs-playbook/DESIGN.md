@@ -475,3 +475,17 @@ Fixed now, so the result can't pick its own threshold later:
     - (d) A3 is within one trial of A4 (11/12) on the workflow tasks.
     - (e) A0 (no guidance) does no better than A1 (7/12) on the workflow
       tasks.
+- **2026-09-29, round 4 amendment (registered after seeing round-4 batch 1,
+  before batches 2–3 or any new cell).** Batch 1's A0 (no guidance,
+  *explicit* "use klar" prompt) passed all four workflow tasks, including
+  T3's escalation. Its transcript shows klar's own `find` output
+  (`reason: lightness-exhausted`, plus the `--allow-desaturation` message)
+  prompting the escalation. Prediction (e) compares A0-explicit with
+  A1-implicit, which confounds guidance with phrasing. **Added cell (round
+  4b):** A1 and A4 on *explicit* phrasing, on T3, T5, T8 and T9, Sonnet
+  5.5, n=3: 24 trials. With A0-explicit from round 4, only the guidance
+  varies. **Question:** once the agent is already using klar, does the
+  playbook still change workflow outcomes, or do klar's own
+  `reason`/`resolvableBy` messages carry that load? No directional
+  prediction is registered for 4b, because this cell exists because of what
+  batch 1 showed, and a prediction written now would be informed by it.
