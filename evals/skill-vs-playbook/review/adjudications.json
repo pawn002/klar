@@ -39,5 +39,30 @@
     "pass": false,
     "by": "Opus judge (review/judge-opus-round3.jsonl), per the round-3 pre-registration: prose parts of 0.2 tasks are decided by the judge",
     "reason": "BORDERLINE. The table is correct (3 filled cells, 9 empty) and matches the agent's own tool output, but the headline sentence says '4 of the 12 cells are displayable... 8 empty'. That is a false count in the claim the user reads first. Accepted per procedure; flagged for the author."
+  },
+  "r4-sonnet-b1-a3/A3-T8-implicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round4.jsonl), per the round-3/4 procedure: prose parts of 0.2 tasks are decided by the judge",
+    "reason": "Five recommended colors all reach 4.5; min pairwise deltaE 21. Rejected teal and reference colors excluded."
+  },
+  "r4-sonnet-b2-a0/A0-T8-explicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round4.jsonl), per the round-3/4 procedure: prose parts of 0.2 tasks are decided by the judge",
+    "reason": "Five recommended colors all reach 4.5; min pairwise deltaE 15. Rejected colors excluded."
+  },
+  "r4-sonnet-b3-a3/A3-T8-implicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round4.jsonl), per the round-3/4 procedure: prose parts of 0.2 tasks are decided by the judge",
+    "reason": "Five recommended colors all reach 4.5; min pairwise deltaE 19. Other named colors were originals it adjusted away from."
+  },
+  "r4-sonnet-b3-a0/A0-T3-explicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round4.jsonl), per the round-3/4 procedure: prose parts of 0.2 tasks are decided by the judge",
+    "reason": "Defers explicitly: 'this is a judgment call on my part. Tell me if you want to keep the chroma.' Author verified the quote. The provisional check read only the opening."
+  },
+  "r4-sonnet-b3-a3/A3-T3-implicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round4.jsonl), per the round-3/4 procedure: prose parts of 0.2 tasks are decided by the judge",
+    "reason": "Offers the brand choice back: 'If 13 is too far, these are the options.' Author verified the quote."
   }
 }
