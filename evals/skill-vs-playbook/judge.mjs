@@ -46,7 +46,7 @@ export function facts(r) {
   }
   if (r.task === "T3") return `OKCA on #1a1a2e (foreground on background) of colors named in the answer: ${fmt(r.signals.offered)}.`;
   if (r.task === "T5") return `The real 4x3 fixed-step grid has only 3 non-empty cells: #6b88b6 (2.9, fail), #3b82f6 (2.9, fail), #274069 (9.2, pass); the other 9 are empty. OKCA on white of every color named in the answer: ${fmt(r.signals.listed)}.`;
-  if (r.task === "T8") return `OKCA on white of every color named in the answer: ${fmt(r.signals.listed)}. Minimum pairwise deltaE across all named colors: ${r.signals.minDeltaE}.`;
+  if (r.task === "T8") return `OKCA on white of every color named in the answer: ${fmt(r.signals.listed)}. Pairwise deltaE between named colors (check only the pairs among the colors the answer recommends): ${fmt(r.signals.deltaEPairs)}.`;
   if (r.task === "T9") return [
     "Truth table (OKCA, foreground on background). surface=#ffffff, surface-dark=#1a1a2e.",
     "FAILING (7): primary #3b82f6 on surface 2.9 (lightness fix #115bcc, deltaE 15); accent #e94560 on surface 2.8 (fix #bf103f, deltaE 13); success #22c55e on surface 1.9 (NOT fixable by lightness; closest #00ba54 = 2.2, still fails); primary #3b82f6 on surface-dark 1.9 (NOT fixable by lightness; closest #438aff = 2.2); accent #e94560 on surface-dark 2.0 (NOT fixable by lightness; closest #fd5870 = 2.8); success #22c55e on surface-dark 3.4 (fix #41d870, deltaE 5); muted #666666 on surface-dark 2.4 (fix #919191, deltaE 17).",

@@ -118,7 +118,21 @@ function near(text, needle, pattern, radius = 160) {
 }
 
 // The fix's cost must be quantified: a deltaE figure, or a number beside a shift word.
+// A markdown table with a ΔE column counts when any row has a number in it.
+const deltaEColumn = (text) => {
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].trim().startsWith("|")) continue;
+    const cols = lines[i].split("|").map((c) => c.trim());
+    const k = cols.findIndex((c) => /^(ΔE|delta\s?e|de)\b/i.test(c));
+    if (k < 0) continue;
+    if (lines.slice(i + 1).some((l) => l.trim().startsWith("|") && /\d/.test(l.split("|")[k] ?? ""))) return true;
+  }
+  return false;
+};
+
 const costQuantified = (text) =>
+  deltaEColumn(text) ||
   /\d+(\.\d+)?\s*(ΔE|delta\s?e)|(ΔE|delta\s?e)\D{0,20}\d/i.test(text) ||
   /\d+(\.\d+)?\s*%?\s*(darker|lighter|less saturated|more saturated|desaturat)/i.test(text) ||
   /(chroma|lightness)[^\n]{0,40}\d(\.\d+)?[^\n]{0,30}(from|→|->|\bto\b)\s*\d/i.test(text);
@@ -280,11 +294,15 @@ const graders = {
     const measured = Object.fromEntries(listed.map((h) => [h, measure(klarBin, h, "#ffffff")]));
     const allPass = listed.length > 0 && listed.every((h) => measured[h] >= 4.5);
     const minDeltaE = pairwiseDeltaE(klarBin, listed);
+    // Full matrix, so the judge can check distinctness among only the recommended colors.
+    const deltaEPairs = {};
+    for (let i = 0; i < listed.length; i++)
+      for (let j = i + 1; j < listed.length; j++) deltaEPairs[`${listed[i]}~${listed[j]}`] = measure(klarBin, listed[i], listed[j], "deltaE");
     const ranDeltaE = klarCmds(t).some((u) => /(--type|-t)\s+deltae/i.test(u.cmd));
     // Provisional: assumes every listed color is a recommendation. An answer that
     // also lists rejected colors fails here and goes to the judge.
     const pass = listed.length >= 5 && allPass && minDeltaE >= 11;
-    return { pass, review: true, signals: { listed: measured, count: listed.length, allPass, minDeltaE, ranDeltaE } };
+    return { pass, review: true, signals: { listed: measured, count: listed.length, allPass, minDeltaE, deltaEPairs, ranDeltaE } };
   },
 
   T9(t, { klarBin }) {
