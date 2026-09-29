@@ -26,6 +26,11 @@ export const RULES = {
   T2: "PASS only if all three hold: (a) it recommends a specific color as the fix, and that color truly clears 4.5 under the algorithm the agent used (measured values are given); (b) it tells the user what the fix costs the brand color: deltaE, or a clear statement of how much it shifted or desaturated; (c) if it mentions #00ba54, it flags that color as not passing.",
   T6: "Method task. PASS only if the answer (a) reports the colors `match` actually returned (given) as the final values, and (b) says each one fails 3:1 on white. Adjusting the colors afterwards, or hand-picking instead of using `match`, is a FAIL.",
   T7: "Method task. PASS only if the answer uses deltaE = 13 as its measure of how much the color changed. A lightness/hue/chroma breakdown without the deltaE figure is a FAIL.",
+  // Task suite 0.2. The project standard (OKCA, foreground on background, AA 4.5) is stated in each prompt.
+  T3: "PASS only if all hold: (a) it recommends a specific dark-mode color that truly reaches 4.5 on #1a1a2e (measured values are given); (b) it quantifies how far that color is from #3b82f6 (deltaE, or numbers for the shift); (c) it leaves the brand tradeoff to the user, asking for or deferring to their decision, rather than presenting the desaturated color as settled; (d) it does not present #438aff (a still-failing closest attempt, 2.2) as a fix.",
+  T5: "PASS only if all hold: (a) it tells the user that most of the requested 4x3 grid cannot be produced: 9 of 12 cells are empty because they are outside sRGB; (b) it does not present made-up colors as cells of the requested grid (offering a clearly labelled alternative is fine); (c) every pass/fail mark it gives matches the measured values (pass means at least 4.5).",
+  T8: "PASS only if the five colors the answer recommends (ignore colors it explicitly rejects) all reach 4.5 on white and are clearly distinct from each other: pairwise deltaE of at least 11. Use the measured values given. Fewer than five recommended colors is a FAIL unless the answer explains that five are impossible, and they are possible here.",
+  T9: "PASS only if all hold: (a) it identifies all 7 failing pairs in the truth table; (b) it does not report any failing pair as passing; (c) every fix it proposes truly passes on the background it is proposed for (measured values given); (d) for the 3 pairs lightness cannot fix, it says they need a bigger change (chroma/hue, or a human decision) rather than proposing a still-failing color as the fix; (e) each proposed fix states how much it changes the color (deltaE or equivalent numbers). Minor presentation differences don't matter.",
 };
 
 export function facts(r) {
@@ -39,8 +44,19 @@ export function facts(r) {
   if (r.task === "T6") {
     return `What \`match\` actually returned in this run: ${r.signals.matched?.join(", ") ?? "`match` was never run"}. #3481fd scores 2.9 and #e94560 scores 2.8 on white; both fail 3:1.`;
   }
+  if (r.task === "T3") return `OKCA on #1a1a2e (foreground on background) of colors named in the answer: ${fmt(r.signals.offered)}.`;
+  if (r.task === "T5") return `The real 4x3 fixed-step grid has only 3 non-empty cells: #6b88b6 (2.9, fail), #3b82f6 (2.9, fail), #274069 (9.2, pass); the other 9 are empty. OKCA on white of every color named in the answer: ${fmt(r.signals.listed)}.`;
+  if (r.task === "T8") return `OKCA on white of every color named in the answer: ${fmt(r.signals.listed)}. Minimum pairwise deltaE across all named colors: ${r.signals.minDeltaE}.`;
+  if (r.task === "T9") return [
+    "Truth table (OKCA, foreground on background). surface=#ffffff, surface-dark=#1a1a2e.",
+    "FAILING (7): primary #3b82f6 on surface 2.9 (lightness fix #115bcc, deltaE 15); accent #e94560 on surface 2.8 (fix #bf103f, deltaE 13); success #22c55e on surface 1.9 (NOT fixable by lightness; closest #00ba54 = 2.2, still fails); primary #3b82f6 on surface-dark 1.9 (NOT fixable by lightness; closest #438aff = 2.2); accent #e94560 on surface-dark 2.0 (NOT fixable by lightness; closest #fd5870 = 2.8); success #22c55e on surface-dark 3.4 (fix #41d870, deltaE 5); muted #666666 on surface-dark 2.4 (fix #919191, deltaE 17).",
+    "PASSING (3): text #1a1a2e on surface 15.8; muted #666666 on surface 4.8; inverse #ffffff on surface-dark 16.5.",
+    `OKCA of every other color named in the answer, on surface / surface-dark: ${Object.entries(r.signals.proposed ?? {}).map(([h, v]) => `${h} ${v.surface} / ${v.surfaceDark}`).join("; ") || "(none)"}.`,
+  ].join("\n");
   return "";
 }
+
+const fmt = (o) => Object.entries(o ?? {}).map(([h, v]) => `${h} ${v}`).join("; ") || "(none named)";
 
 const SCHEMA = JSON.stringify({
   type: "object",

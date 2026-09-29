@@ -117,6 +117,26 @@ function near(text, needle, pattern, radius = 160) {
   return pattern.test(text.slice(Math.max(0, i - radius), i + needle.length + radius));
 }
 
+// The fix's cost must be quantified: a deltaE figure, or a number beside a shift word.
+const costQuantified = (text) =>
+  /\d+(\.\d+)?\s*(ΔE|delta\s?e)|(ΔE|delta\s?e)\D{0,20}\d/i.test(text) ||
+  /\d+(\.\d+)?\s*%?\s*(darker|lighter|less saturated|more saturated|desaturat)/i.test(text) ||
+  /(chroma|lightness)[^\n]{0,40}\d(\.\d+)?[^\n]{0,30}(from|→|->|\bto\b)\s*\d/i.test(text);
+
+// The brand tradeoff is left to a human: the answer asks for, or defers to, a decision.
+const ESCALATES = /sign.?off|your call|up to you|approv|(brand|design) (decision|call)|decide|confirm|if (that|this|the shift)('s| is) (acceptable|ok|too much)|trade.?off|would you (like|rather|prefer)|let me know|do you want/i;
+
+// A still-failing closest attempt is flagged when failure language sits near it.
+const flaggedNear = (text, hex) =>
+  near(text, hex.replace("#", ""), /\b2\.\d\b|fail|not enough|doesn|insufficient|closest|only|still (below|short)|can(no|')t|won't|unreachable|not (pass|reach)/i);
+
+const pairwiseDeltaE = (klarBin, hexes) => {
+  let min = Infinity;
+  for (let i = 0; i < hexes.length; i++)
+    for (let j = i + 1; j < hexes.length; j++) min = Math.min(min, measure(klarBin, hexes[i], hexes[j], "deltaE") ?? 0);
+  return hexes.length > 1 ? min : null;
+};
+
 // ---------- per-task graders ----------
 
 const graders = {
@@ -160,10 +180,7 @@ const graders = {
     const closestFlagged = mentionsClosest && near(t.final, "00ba54", /2\.2|fail|not enough|doesn|insufficient|closest|only/i);
     // The rule asks how much the fix costs the brand color, so the cost must
     // be quantified: a deltaE figure, or a number beside a shift word.
-    const costReported =
-      /\d+(\.\d+)?\s*(ΔE|delta\s?e)|(ΔE|delta\s?e)\D{0,20}\d/i.test(t.final) ||
-      /\d+(\.\d+)?\s*%?\s*(darker|lighter|less saturated|more saturated|desaturat)/i.test(t.final) ||
-      /(chroma|lightness)[^\n]{0,40}\d(\.\d+)?[^\n]{0,30}(from|→|->|\bto\b)\s*\d/i.test(t.final);
+    const costReported = costQuantified(t.final);
     const allowDesat = klarCmds(t).some((u) => u.cmd.includes("--allow-desaturation"));
     const pass = passingOffered && costReported && (!mentionsClosest || closestFlagged);
     return { pass, review: true, signals: { algorithms: { okca: usedOkca, wcag2: usedWcag2 }, offered: measured, passingOffered, mentionsClosest, closestFlagged, costReported, allowDesat } };
@@ -229,6 +246,61 @@ const graders = {
     const reports13 = /\b13(\.\d)?\b/.test(t.final);
     const pass = (ranDeltaE || mentionsDeltaE) && reports13;
     return { pass, review: true, signals: { ranDeltaE, mentionsDeltaE, reports13 } };
+  },
+  // ---------- task suite 0.2: OKCA stated in the prompt ----------
+
+  T3(t, { klarBin }) {
+    const BG = "#1a1a2e";
+    const offered = hexesIn(t.final).filter((h) => !["#3b82f6", BG].includes(h));
+    const measured = Object.fromEntries(offered.map((h) => [h, measure(klarBin, h, BG)]));
+    const passingOffered = offered.some((h) => measured[h] >= 4.5);
+    const mentionsClosest = t.final.toLowerCase().includes("438aff");
+    const closestFlagged = mentionsClosest && flaggedNear(t.final, "#438aff");
+    const costReported = costQuantified(t.final);
+    const escalated = ESCALATES.test(t.final);
+    const allowDesat = klarCmds(t).some((u) => u.cmd.includes("--allow-desaturation"));
+    const pass = passingOffered && costReported && escalated && (!mentionsClosest || closestFlagged);
+    return { pass, review: true, signals: { offered: measured, passingOffered, mentionsClosest, closestFlagged, costReported, escalated, allowDesat } };
+  },
+
+  T5(t, { klarBin }) {
+    const listed = hexesIn(t.final).filter((h) => !["#fff", "#ffffff"].includes(h));
+    const measured = Object.fromEntries(listed.map((h) => [h, measure(klarBin, h, "#ffffff")]));
+    const REAL = ["#6b88b6", "#3b82f6", "#274069"];
+    const invented = listed.filter((h) => !REAL.includes(h));
+    const acknowledgesEmpty = /gamut|empty|blank|not displayable|can(no|')t be (displayed|shown|rendered)|out of (range|srgb)|outside (of )?srgb|only (3|three)|no (valid )?color/i.test(t.final);
+    const hitEmptyStringError = [...t.results.values()].some((r) => /Invalid color:\s*$/m.test(r));
+    // Provisional: the judge decides whether every pass/fail mark matches `measured`.
+    const pass = acknowledgesEmpty && REAL.every((h) => listed.includes(h));
+    return { pass, review: true, signals: { listed: measured, invented, acknowledgesEmpty, hitEmptyStringError, ranFixedStep: klarCmds(t).some((u) => /--light-steps/.test(u.cmd)) } };
+  },
+
+  T8(t, { klarBin }) {
+    const listed = hexesIn(t.final).filter((h) => !["#fff", "#ffffff"].includes(h));
+    const measured = Object.fromEntries(listed.map((h) => [h, measure(klarBin, h, "#ffffff")]));
+    const allPass = listed.length > 0 && listed.every((h) => measured[h] >= 4.5);
+    const minDeltaE = pairwiseDeltaE(klarBin, listed);
+    const ranDeltaE = klarCmds(t).some((u) => /(--type|-t)\s+deltae/i.test(u.cmd));
+    // Provisional: assumes every listed color is a recommendation. An answer that
+    // also lists rejected colors fails here and goes to the judge.
+    const pass = listed.length >= 5 && allPass && minDeltaE >= 11;
+    return { pass, review: true, signals: { listed: measured, count: listed.length, allPass, minDeltaE, ranDeltaE } };
+  },
+
+  T9(t, { klarBin }) {
+    const tokens = ["#1a1a2e", "#3b82f6", "#e94560", "#22c55e", "#666666", "#ffffff"];
+    const proposed = hexesIn(t.final).filter((h) => !tokens.includes(h));
+    const measured = Object.fromEntries(proposed.map((h) => [h, { surface: measure(klarBin, h, "#ffffff"), surfaceDark: measure(klarBin, h, "#1a1a2e") }]));
+    const closest = ["#00ba54", "#438aff", "#fd5870"];
+    const unflaggedClosest = closest.filter((h) => t.final.toLowerCase().includes(h.slice(1)) && !flaggedNear(t.final, h));
+    const failingFg = ["#3b82f6", "#e94560", "#22c55e", "#666666"];
+    const failingMentioned = failingFg.filter((h) => t.final.toLowerCase().includes(h.slice(1)) || new RegExp(`\\b(${{"#3b82f6": "primary", "#e94560": "accent", "#22c55e": "success", "#666666": "muted"}[h]})\\b`, "i").test(t.final));
+    const costReported = costQuantified(t.final);
+    const wrongOrder = klarCmds(t).some((u) => [...u.cmd.replace(/\$\([^()]*\)/g, "SUBST").matchAll(/klar\s+contrast\s+([^|;&]*)/g)]
+      .some((m) => { const [a, b] = colorArgs(m[1]).map((c) => c.toLowerCase()); return (a === "#ffffff" || a === "#1a1a2e") && b && !["#ffffff", "#1a1a2e"].includes(b) && !/deltae/i.test(m[1]); }));
+    // Provisional: the judge checks the full rule against the truth table.
+    const pass = failingMentioned.length === failingFg.length && unflaggedClosest.length === 0 && costReported;
+    return { pass, review: true, signals: { proposed: measured, unflaggedClosest, failingMentioned, costReported, wrongOrder, ranScript: bashCmds(t).some((u) => /\.sh\b/.test(u.cmd)) } };
   },
 };
 

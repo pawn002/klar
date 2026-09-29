@@ -368,3 +368,39 @@ Fixed now, so the result can't pick its own threshold later:
     (12/15 vs 6/15); on Sonnet outcomes are at ceiling without it. What
     the guidance reliably adds on both models is the domain *method* the
     base model doesn't have (ΔE for "did it change much").
+- **2026-09-29, round 3 plan: workflow tasks, OKCA as the stated standard
+  (fixed before any round-3 trial).**
+  - **Why:** rounds 1–2 tested five single-step traps, not the playbook's
+    workflows. W1 (palette) and W2 (dark mode) were untested, and W3 and W5
+    only partly. Sonnet reached the ceiling on those short tasks, so its
+    "rule not met" result may be a task-difficulty artifact.
+  - **Task suite 0.2** (`tasks/tasks.json`) adds T3 (dark mode, W2), T5
+    (fixed-step grid, W1's escape hatch), T8 (accents, W5) and T9 (a full
+    audit with fixes across two backgrounds, W3; fixture
+    `fixtures/tokens-system.json`). T1–T7 are unchanged.
+  - **OKCA is the stated project standard.** Each 0.2 prompt begins, in every
+    arm: "We measure contrast with OKCA, foreground on background, at WCAG AA
+    thresholds (body text 4.5)." klar is not named, so discovery is still
+    tested. Grading OKCA correctness is therefore grading whether the agent
+    follows the project's stated standard, not the author's algorithm
+    preference. The earlier rounds' algorithm-consistent scoring was right
+    for prompts that only said "WCAG AA", and stands for T1–T7.
+  - **Graders:** deterministic signals plus a provisional verdict. The
+    prose-dependent parts (T3's escalation; T5's pass/fail marks; T8's
+    recommended set; T9's full rule) are decided by the blind Opus judge,
+    given measured facts and T9's truth table. Disagreements go to
+    `review/adjudications.json` with reasons. Each grader was checked
+    against hand-written good and trap answers before any trial ran (9/9
+    correct), and T2's refactor changed no existing verdict.
+  - **Cells:** A1 implicit vs A4 implicit, Sonnet 5.5, n=3 per cell, 24
+    trials. A0, A3 and Haiku are omitted for budget.
+  - **Predictions:**
+    - (1) The loading gap replicates (A1 ≤ 1/12, A4 ≥ 11/12).
+    - (2) The key test: on workflow tasks, A4 beats A1 by ≥15 points on
+      Sonnet. If it does, the Sonnet shortfall in the confirmation round is
+      attributed to task difficulty. If it doesn't, the skill's value on
+      Sonnet is method-only and the post says so.
+    - (3) OKCA use: agents given the standard measure foreground on
+      background. T9's `wrongOrder` signal is reported per arm.
+  - **Still untested after this round:** T0 (the always-loaded context-cost
+    control) and every A0/A3 cell on 0.2 tasks.

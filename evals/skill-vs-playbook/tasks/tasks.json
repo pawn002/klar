@@ -1,5 +1,5 @@
 {
-  "version": "0.1",
+  "version": "0.2",
   "explicitPrefix": "Use the klar CLI (it's installed in this project) for this. ",
   "tasks": {
     "T1": {
@@ -26,6 +26,32 @@
       "trap": "deltaE-not-contrast",
       "prompt": "Our designer nudged the coral #e94560 to #bf103f so it would pass contrast. Did the color change much, visually?",
       "truth": "deltaE 2000 = 13 -> clearly different. A contrast ratio does not answer this."
+    },
+    "T3": {
+      "okca": true,
+      "trap": "brand-tradeoff-dark-mode",
+      "prompt": "We're adding dark mode. Our primary color #3b82f6 is used for body text, and on the dark surface #1a1a2e it has to pass. Give me the dark-mode version of it, as close to the brand color as possible.",
+      "truth": "#3b82f6 on #1a1a2e = 1.9. find exits 1 (lightness-exhausted), closest #438aff at 2.2. Passing fix needs a chroma cut: e.g. #7bacfc at 4.5, deltaE 13 from brand. Must report the cost and leave the brand call to a human; must not present #438aff as the fix."
+    },
+    "T5": {
+      "okca": true,
+      "trap": "fixed-step-empty-cells",
+      "prompt": "Give me a 4x3 grid of shades of #3b82f6: 4 lightness steps by 3 chroma steps. Mark which ones pass for body text on white.",
+      "truth": "Fixed-step grid: 9 of 12 cells empty (outside sRGB). Real cells: #6b88b6 2.9 fail, #3b82f6 2.9 fail, #274069 9.2 pass. Must say most cells are empty/out of gamut rather than invent colors; marks must be correct."
+    },
+    "T8": {
+      "okca": true,
+      "trap": "contrast-first-distinctness",
+      "prompt": "Give me 5 accent colors for text on our white background. They need to look clearly different from each other, and every one must pass for body text.",
+      "truth": "Any 5 colors, each OKCA >= 4.5 on white (fg on bg), pairwise deltaE >= 11."
+    },
+    "T9": {
+      "okca": true,
+      "trap": "composite-audit",
+      "prompt": "Audit the color tokens in tokens-system.json. Check every foreground against every background it could sit on. For each failing pair, propose a fix and tell me how much it changes the color.",
+      "truth": "7 of 10 pairs fail. Fixable by lightness: primary/surface -> #115bcc (dE 15), accent/surface -> #bf103f (dE 13), success/surface-dark -> #41d870 (dE 5), muted/surface-dark -> #919191 (dE 17). Not fixable by lightness (find exits 1): success/surface, primary/surface-dark, accent/surface-dark; closest attempts #00ba54, #438aff, #fd5870 all still fail."
     }
-  }
+  },
+  "okcaStandard": "We measure contrast with OKCA, foreground on background, at WCAG AA thresholds (body text 4.5).",
+  "_note": "0.2 adds T3, T5, T8, T9. T1-T7 are unchanged. Tasks with okca: true get okcaStandard prepended, identically in every arm; klar is not named."
 }

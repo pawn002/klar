@@ -88,7 +88,8 @@ function setupTrial(id, arm) {
 
 function runTrial({ id, arm, task, phr }) {
   const { projDir, cfgDir } = setupTrial(id, arm);
-  const prompt = (phr === "explicit" ? suite.explicitPrefix : "") + suite.tasks[task].prompt;
+  const t = suite.tasks[task];
+  const prompt = (phr === "explicit" ? suite.explicitPrefix : "") + (t.okca ? suite.okcaStandard + " " : "") + t.prompt;
   const env = trialEnv(projDir, cfgDir);
   const transcript = path.join(resultsDir, "transcripts", `${id}.jsonl`);
   const out = fs.openSync(transcript, "w");
