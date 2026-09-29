@@ -336,3 +336,35 @@ Fixed now, so the result can't pick its own threshold later:
   - **T6:** the method rule stays primary, for comparability. Every result
     is also reported with T6 excluded, as a sensitivity check, because T6
     stopped discriminating in round 2.
+- **2026-09-29, confirmation round result (Sonnet 5.5, n=3 per cell, 45
+  trials, $4.64 at list price, plus $1.95 for the judge).**
+  - **No grader bugs found in the audit.** The Opus judge agreed on 35/36
+    verdicts on its first pass. The disagreement (A4-T6, batch 1) is
+    recorded in `review/adjudications.json` and applied by `regrade.mjs`:
+    that answer *recommended* an adjusted pair after reporting `match`'s
+    output, which the T6 rule counts as a fail. The rule-based grader
+    can't tell recommending from offering.
+  - **Results (pass / guidance loaded):** A1 12/15, 0/15; A4 14/15, 15/15;
+    A4-explicit 15/15, 15/15. Outcome tasks (T1, T2, T4): 9/9 in every cell.
+    Excluding T6: A1 9/12, A4 12/12, A4-explicit 12/12. A1's only failures
+    are T7: 0/3, never using ΔE.
+  - **Predictions, as pre-registered:**
+    - (1) The loading gap replicates: A1 0/15, A4 15/15, p = 1e-8 ✓.
+    - (2) A4 passes more than A1: 14/15 vs 12/15. The direction holds, but
+      p = 0.60, so it is not significant. The gap shrank on the stronger
+      model, as anticipated.
+    - (3) A4 explicit is not worse than A4 implicit: 15/15 vs 14/15 ✓.
+  - **The decision rule on Sonnet: not met.** A4 beats A1 by 13 points,
+    under the 15-point bar. On Sonnet the pointer arm gets every outcome
+    task right without reading the playbook. The skill's measurable
+    advantage is confined to method (ΔE on T7, 3/3 vs 0/3, p = 0.10).
+  - **Cost of the skill on Sonnet:** A4 costs about 2× A1 per trial ($1.89
+    vs $0.92 for 15 trials) and takes more turns (6.2 vs 3.9), because it
+    actually reads the ~7K-token playbook.
+  - **Combined reading (Haiku + Sonnet):** the discovery finding is robust
+    across both models. The pointer is never followed (0/45 across all
+    pointer cells); the thin skill always loads (30/30). Whether loading
+    the guidance changes *outcomes* depends on the model: on Haiku it did
+    (12/15 vs 6/15); on Sonnet outcomes are at ceiling without it. What
+    the guidance reliably adds on both models is the domain *method* the
+    base model doesn't have (ΔE for "did it change much").

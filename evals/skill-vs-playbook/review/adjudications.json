@@ -1,0 +1,8 @@
+{
+  "_note": "Verdict overrides where the rule-based grader cannot draw the line the rule draws. Each entry records who decided it and why. Applied by regrade.mjs.",
+  "conf-sonnet-b1-imp/A4-T6-implicit-sonnet-0": {
+    "pass": false,
+    "by": "Opus judge (review/judge-opus-confirm-sonnet.jsonl), accepted by author's harness 2026-09-29",
+    "reason": "Reports match's colors and their failure, but then recommends an adjusted pair as the one to use ('I'd take the adjusted pair below'). The T6 rule counts adjusting afterwards as a FAIL. Answers that only offer adjusted colors are not affected."
+  }
+}
