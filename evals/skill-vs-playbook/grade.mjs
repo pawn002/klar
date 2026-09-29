@@ -78,12 +78,12 @@ export function commonSignals(t, arm) {
 // ---------- helpers ----------
 
 const WHITE = /^#(fff|ffffff)$|^white$/i;
-const FAIL_WORDS = /\b(fails?|failing|does ?n[o’']t (pass|meet|work)|do ?n[o’']t (pass|meet|work)|not (meet|pass|sufficient|enough|compliant|accessible)|below|insufficient|falls? short|won[’']t work|no longer (passes|works|meets))\b/i;
+const FAIL_WORDS = /\b(fails?|failing|(does|do) ?n[o’']t (quite |fully )?(pass|meet|work|clear|reach)|just short|not (meet|pass|sufficient|enough|compliant|accessible)|below|insufficient|falls? short|won[’']t work|no longer (passes|works|meets))\b/i;
 const hexesIn = (s) => [...new Set((s.match(/#[0-9a-f]{6}\b|#[0-9a-f]{3}\b/gi) ?? []).map((h) => h.toLowerCase()))];
 const colorArgs = (cmd) => (cmd.match(/#[0-9a-fA-F]{3,8}\b|\bwhite\b|oklch\([^)]*\)/g) ?? []);
 
-function measure(klarBin, fg, bg) {
-  const r = spawnSync(klarBin, ["contrast", fg, bg, "-q"], { encoding: "utf8" });
+function measure(klarBin, fg, bg, type) {
+  const r = spawnSync(klarBin, ["contrast", fg, bg, "-q", ...(type ? ["--type", type] : [])], { encoding: "utf8" });
   return r.status === 2 ? null : parseFloat(r.stdout);
 }
 
@@ -117,15 +117,23 @@ const graders = {
   },
 
   T2(t, { klarBin }) {
+    // Algorithm-consistent, like T1: offered colors are measured with every
+    // algorithm the agent actually used, and pass if they clear 4.5 under it.
+    const usedWcag2 = klarCmds(t).some((u) => /--type\s+wcag2/i.test(u.cmd));
+    const usedOkca = klarCmds(t).some((u) => /\b(contrast|find)\b/.test(u.cmd) && !/--type\s+wcag2/i.test(u.cmd));
     const offered = hexesIn(t.final).filter((h) => !["#22c55e", "#fff", "#ffffff"].includes(h));
-    const measured = Object.fromEntries(offered.map((h) => [h, measure(klarBin, h, "#ffffff")]));
-    const passingOffered = offered.some((h) => measured[h] >= 4.5);
+    const measured = Object.fromEntries(offered.map((h) => [h, {
+      okca: measure(klarBin, h, "#ffffff"),
+      wcag2: measure(klarBin, h, "#ffffff", "wcag2"),
+    }]));
+    const clears = (h) => (usedOkca && measured[h].okca >= 4.5) || (usedWcag2 && measured[h].wcag2 >= 4.5);
+    const passingOffered = offered.some(clears);
     const mentionsClosest = t.final.toLowerCase().includes("00ba54");
     const closestFlagged = mentionsClosest && near(t.final, "00ba54", /2\.2|fail|not enough|doesn|insufficient|closest|only/i);
     const costReported = /delta\s?e|ΔE|perceptual|less saturated|desaturat|chroma|visibly different|brand (shift|cost|change)/i.test(t.final);
     const allowDesat = klarCmds(t).some((u) => u.cmd.includes("--allow-desaturation"));
     const pass = passingOffered && costReported && (!mentionsClosest || closestFlagged);
-    return { pass, review: true, signals: { offered: measured, passingOffered, mentionsClosest, closestFlagged, costReported, allowDesat } };
+    return { pass, review: true, signals: { algorithms: { okca: usedOkca, wcag2: usedWcag2 }, offered: measured, passingOffered, mentionsClosest, closestFlagged, costReported, allowDesat } };
   },
 
   T4(t, { projDir, env }) {

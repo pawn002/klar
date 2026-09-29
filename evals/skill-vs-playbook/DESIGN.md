@@ -203,3 +203,19 @@ Fixed now, so the result can't pick its own threshold later:
     guidance changes method, and the post must say so.
   - Batch 1 rows are regraded from the saved transcripts
     (`rows.regraded.jsonl`); the run-time rows are kept.
+- **2026-09-29, after pilot batch 2 of 3 (grader validation):**
+  - **Failure-word bug fixed.** "doesn't quite meet… just short" was missed,
+    which failed a correct T1 answer. Optional adverbs, "clear/reach" and
+    "just short" are now matched. Regrading changed only that row.
+  - **T2 made algorithm-consistent,** extending the T1 decision: offered
+    colors are measured with each algorithm the agent actually ran. No
+    verdict changed. A0-T2 still fails, because it called the shift "modest"
+    without quantifying the cost.
+  - **T6 unchanged: method required (author's decision).** Two answers were
+    correct by outcome but skipped or went beyond `match`. One hand-picked
+    colors with matched chroma 0.19 at exactly 3.0. The other matched, then
+    re-adjusted both colors to 3.3. Both are scored as failures.
+  - **Task classes, for the write-up:** T1, T2 and T4 score *outcome*
+    (algorithm-consistent). T6 and T7 score *method*: did the agent work the
+    way the playbook teaches. Report the two classes separately; a method
+    failure is not a wrong answer.
