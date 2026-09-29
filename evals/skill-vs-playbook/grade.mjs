@@ -96,6 +96,21 @@ function measure(klarBin, fg, bg, type) {
   return r.status === 2 ? null : parseFloat(r.stdout);
 }
 
+// WCAG 2.x ratio computed exactly. klar rounds wcag2 to one decimal before
+// comparing (#068a3d: true 4.458 displays and passes as 4.5), and WCAG 2's
+// threshold is unrounded, so the grader must not trust klar's wcag2 figure.
+function wcag2Exact(hexA, hexB) {
+  const lum = (h) => {
+    h = h.replace("#", "");
+    if (h.length === 3) h = [...h].map((c) => c + c).join("");
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
+      .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const [l1, l2] = [lum(hexA), lum(hexB)].sort((a, b) => b - a);
+  return (l1 + 0.05) / (l2 + 0.05);
+}
+
 function near(text, needle, pattern, radius = 160) {
   const i = text.toLowerCase().indexOf(needle.toLowerCase());
   if (i < 0) return false;
@@ -133,13 +148,18 @@ const graders = {
     const offered = hexesIn(t.final).filter((h) => !["#22c55e", "#fff", "#ffffff"].includes(h));
     const measured = Object.fromEntries(offered.map((h) => [h, {
       okca: measure(klarBin, h, "#ffffff"),
-      wcag2: measure(klarBin, h, "#ffffff", "wcag2"),
+      wcag2: Number(wcag2Exact(h, "#ffffff").toFixed(3)),
     }]));
     const clears = (h) => (usedOkca && measured[h].okca >= 4.5) || (usedWcag2 && measured[h].wcag2 >= 4.5);
     const passingOffered = offered.some(clears);
     const mentionsClosest = t.final.toLowerCase().includes("00ba54");
     const closestFlagged = mentionsClosest && near(t.final, "00ba54", /2\.2|fail|not enough|doesn|insufficient|closest|only/i);
-    const costReported = /delta\s?e|ΔE|perceptual|less saturated|desaturat|chroma|visibly different|brand (shift|cost|change)/i.test(t.final);
+    // The rule asks how much the fix costs the brand color, so the cost must
+    // be quantified: a deltaE figure, or a number beside a shift word.
+    const costReported =
+      /\d+(\.\d+)?\s*(ΔE|delta\s?e)|(ΔE|delta\s?e)\D{0,20}\d/i.test(t.final) ||
+      /\d+(\.\d+)?\s*%?\s*(darker|lighter|less saturated|more saturated|desaturat)/i.test(t.final) ||
+      /(chroma|lightness)[^\n]{0,40}\d(\.\d+)?[^\n]{0,30}(from|→|->|\bto\b)\s*\d/i.test(t.final);
     const allowDesat = klarCmds(t).some((u) => u.cmd.includes("--allow-desaturation"));
     const pass = passingOffered && costReported && (!mentionsClosest || closestFlagged);
     return { pass, review: true, signals: { algorithms: { okca: usedOkca, wcag2: usedWcag2 }, offered: measured, passingOffered, mentionsClosest, closestFlagged, costReported, allowDesat } };

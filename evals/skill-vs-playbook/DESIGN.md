@@ -243,3 +243,26 @@ Fixed now, so the result can't pick its own threshold later:
     never loaded the playbook.
   - "Used klar" reads 14/15 for A1 and A3 only because one T4 trial in each
     called klar inside `audit.sh` rather than directly.
+- **2026-09-29, Opus judge calibration of the 36 prose-read verdicts.**
+  `judge.mjs` runs a blind judge (claude-opus-5-5, headless, fixed prompt and
+  JSON schema, one call per item; log in `review/judge-opus.jsonl`, $1.76 at
+  list price). It never sees the arm or the grader's verdict.
+  - **First-pass agreement: 34/36.** Both disagreements were T2, and in both
+    the judge was right. The grader was then corrected, and agreement is now
+    36/36. That second figure is post hoc; report 34/36 as the independent
+    agreement.
+  - **Disagreement 1 exposed a klar bug.** The agent ran `find -t wcag2` and
+    got `#068a3d` back with `success: true`, exit 0, "4.5". Its exact WCAG 2
+    ratio is 4.458. klar rounds wcag2 to one decimal (`toFixed(1)`) before
+    comparing, so colors whose true ratio falls in [4.45, 4.5) are reported
+    as passing. WCAG 2's threshold is unrounded. The grader now computes
+    WCAG 2 exactly. OKCA also rounds to one decimal, but that rounding is
+    part of OKCA's published output definition, not a comparison applied on
+    top of a standard.
+  - **Disagreement 2: the cost must be quantified.** The rule asks "how much"
+    the fix costs, and "desaturate significantly / more muted" doesn't say
+    how much. The grader now requires a figure: ΔE, a percent or amount, or
+    a from→to value.
+  - Net effect on the pilot: T2 is now A0 1/3, A1 1/3, A3 3/3.
+    Overall: A0 7/15, A1 6/15, A3 12/15. Outcome tasks: A0 4/9, A1 6/9,
+    A3 8/9.
