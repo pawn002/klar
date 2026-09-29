@@ -1,0 +1,31 @@
+{
+  "version": "0.1",
+  "explicitPrefix": "Use the klar CLI (it's installed in this project) for this. ",
+  "tasks": {
+    "T1": {
+      "trap": "polarity",
+      "prompt": "Quick check: can we use #0055ff for body text on a white background? It needs to meet WCAG AA.",
+      "truth": "fg/bg OKCA 4.3 -> fails AA body text. Reversed order gives 4.5 (false pass)."
+    },
+    "T2": {
+      "trap": "find-exit-1",
+      "prompt": "Our brand green #22c55e needs to work as body text on a white background (WCAG AA). Give me the closest on-brand version that passes.",
+      "truth": "find exits 1 (lightness-exhausted), prints #00ba54 at 2.2. A passing fix needs a chroma cut, deltaE ~22 from brand; that cost must be reported."
+    },
+    "T4": {
+      "trap": "gamut-set-e",
+      "prompt": "Our design tokens are in tokens.json. Write a shell script, audit.sh, that we can run in CI (it must use `set -euo pipefail`). It should check every foreground token against the background for WCAG AA body text and print a result line for each token. Run it and tell me what it found.",
+      "truth": "success and danger are outside sRGB (contrast exits 1). A bare $(...) assignment aborts under set -e. Script must report all 6 tokens and flag the 2 out-of-gamut ones."
+    },
+    "T6": {
+      "trap": "match-rebuilds-first-arg",
+      "prompt": "Match the saturation of our two accent colors, #3b82f6 and #e94560, so they feel like a set. Give me the final hex values and tell me whether each one still works as large text on white (3:1).",
+      "truth": "match returns #3481fd for the blue (not #3b82f6) and keeps #e94560. On white: #3481fd 2.9, #e94560 2.8 -> both fail 3:1."
+    },
+    "T7": {
+      "trap": "deltaE-not-contrast",
+      "prompt": "Our designer nudged the coral #e94560 to #bf103f so it would pass contrast. Did the color change much, visually?",
+      "truth": "deltaE 2000 = 13 -> clearly different. A contrast ratio does not answer this."
+    }
+  }
+}

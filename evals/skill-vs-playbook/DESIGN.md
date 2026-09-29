@@ -139,13 +139,48 @@ Fixed now, so the result can't pick its own threshold later:
 
 ## Open items
 
-- [ ] Harness: runner script, per-arm fixtures, JSONL writer
-- [ ] Task prompts written out in both phrasings, versioned
-- [ ] Oracles for T1–T9
-- [ ] Judge prompt + calibration set for T2/T3
-- [ ] Smoke run: 1 arm × 1 task × n=1, end to end
-- [ ] Check whether `claude plugin eval` can host this instead of a custom runner
+- [x] Harness: `run.mjs` (runner), `arms.mjs` (arm fixtures), `grade.mjs` (graders), JSONL rows
+- [x] Task prompts for the lean round (T1, T2, T4, T6, T7), versioned in `tasks/tasks.json`
+- [x] Deterministic graders for T1, T2, T4, T6, T7
+- [x] Smoke run: A1 × T1 × Haiku × n=1, end to end (`results/smoke/`)
+- [ ] Hand-label the pilot's `review: true` rows to calibrate the prose-reading graders
+- [ ] Graders for T3, T5, T8, T9, T0 (main round only)
+- [ ] Judge prompt + calibration set for T2/T3 (main round only)
+- [ ] Second harness (pi) if the result needs checking outside Claude Code
 
 ## Changelog
 
 - **2026-09-29:** Initial design. Trap ground truth verified on klar 3.0.0.
+- **2026-09-29, before any pilot trial (pre-run changes):**
+  - **Lean pilot replaces the 180-run pilot** for budget reasons. Scope:
+    arms A0, A1, A3. Tasks T1, T2, T4, T6, T7. Haiku 4.5, then Sonnet 5.5 only
+    if Haiku shows a signal. n=3 per cell, 45 trials per model. A2, A4, T0,
+    T3, T5, T8 and T9 wait for the main round.
+  - **Phrasing rule:** A0 runs the *explicit* prompt; A1 and A3 run the
+    *implicit* prompt. A0 with no guidance and no tool named is degenerate,
+    because the agent can't know klar exists. A1 vs A3 on implicit phrasing
+    is the core comparison.
+  - **Skill description fixed** as `SKILL_DESCRIPTION` in `arms.mjs`. It is the
+    one authored string in the skill arms and could decide triggering on its
+    own, so it is frozen before the first pilot trial.
+  - **Harness:** Claude Code headless (`claude -p`, stream-json), run on the
+    author's subscription rather than an API key. `--bare` would give the
+    cleanest isolation but refuses subscription login. Instead, each trial
+    gets its own project and its own `CLAUDE_CONFIG_DIR`, the host session's
+    instruction/skill/sync environment variables are stripped, and the work
+    directory sits outside the klar repo. Every row records the loaded skills
+    and a contamination flag.
+  - **Known constant:** Claude Code's built-in skills (dataviz, claude-api
+    and others) load in every trial. None concerns klar, and they're
+    identical across arms, so they're disclosed rather than removed.
+  - **Permissions:** `dontAsk` plus an allowlist
+    (Bash, Read, Write, Edit, Glob, Grep, Skill). `bypassPermissions` is
+    refused when running as root. `--permission-prompts none` removes
+    `AskUserQuestion`, so a trial reports tradeoffs in its answer instead of
+    pausing for a human.
+  - **Smoke result (harness validation, not data):** A1 × T1 × Haiku passed.
+    It used 2 turns, $0.066 at list price, and 29.7K tokens of cache write.
+    The playbook was never opened: the minimal CLAUDE.md snippet already
+    shows `klar contrast <fg> <bg>`, and that was enough for T1. So A1's
+    "guidance loaded" undercounts the guidance the agent actually had. The
+    pilot reports outcome by arm regardless of load status.
