@@ -11,7 +11,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
@@ -64,7 +64,7 @@ const SCHEMA = JSON.stringify({
   required: ["label", "reason"],
 });
 
-function prompt(r) {
+export function prompt(r) {
   return [
     "You are grading one answer from an AI agent against a fixed scoring rule.",
     "Apply the rule literally. Do not reward answers that are good in other ways the rule does not credit, and do not penalize style.",
@@ -109,26 +109,31 @@ function judgeOne(r) {
   });
 }
 
-const rows = runs.flatMap((run) =>
-  fs.readFileSync(path.join(HERE, "results", run, "rows.regraded.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)),
-).filter((r) => r.review).slice(0, Number(opt("limit", "1e9")));
+// Run only when invoked directly, so RULES and facts() can be imported.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();
 
-const queue = [...rows];
-const out = [];
-// Warm the cache with one call before fanning out.
-if (queue.length) out.push(await judgeOne(queue.shift()));
-await Promise.all(Array.from({ length: parallel }, async () => {
-  while (queue.length) out.push(await judgeOne(queue.shift()));
-}));
-out.sort((a, b) => (a.run + a.id).localeCompare(b.run + b.id));
-fs.mkdirSync(path.join(HERE, "review"), { recursive: true });
-const tag = opt("tag", "");
-const logFile = path.join(HERE, "review", `judge-${model}${tag ? "-" + tag : ""}.jsonl`);
-fs.writeFileSync(logFile, out.map((o) => JSON.stringify(o)).join("\n") + "\n");
+async function main() {
+  const rows = runs.flatMap((run) =>
+    fs.readFileSync(path.join(HERE, "results", run, "rows.regraded.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)),
+  ).filter((r) => r.review).slice(0, Number(opt("limit", "1e9")));
 
-const judged = out.filter((o) => o.judge);
-const agree = judged.filter((o) => o.judge === o.grader);
-console.log(`judged ${judged.length}/${out.length}; agreement with rule-based grader: ${agree.length}/${judged.length}`);
-console.log(`list-price cost: $${out.reduce((a, o) => a + (o.costUsdListPrice ?? 0), 0).toFixed(2)}`);
-for (const o of judged.filter((o) => o.judge !== o.grader)) console.log(`DISAGREE ${o.run} ${o.id}: grader ${o.grader}, judge ${o.judge} — ${o.reason}`);
-for (const o of out.filter((o) => !o.judge)) console.log(`NO VERDICT ${o.run} ${o.id}`);
+  const queue = [...rows];
+  const out = [];
+  // Warm the cache with one call before fanning out.
+  if (queue.length) out.push(await judgeOne(queue.shift()));
+  await Promise.all(Array.from({ length: parallel }, async () => {
+    while (queue.length) out.push(await judgeOne(queue.shift()));
+  }));
+  out.sort((a, b) => (a.run + a.id).localeCompare(b.run + b.id));
+  fs.mkdirSync(path.join(HERE, "review"), { recursive: true });
+  const tag = opt("tag", "");
+  const logFile = path.join(HERE, "review", `judge-${model}${tag ? "-" + tag : ""}.jsonl`);
+  fs.writeFileSync(logFile, out.map((o) => JSON.stringify(o)).join("\n") + "\n");
+
+  const judged = out.filter((o) => o.judge);
+  const agree = judged.filter((o) => o.judge === o.grader);
+  console.log(`judged ${judged.length}/${out.length}; agreement with rule-based grader: ${agree.length}/${judged.length}`);
+  console.log(`list-price cost: $${out.reduce((a, o) => a + (o.costUsdListPrice ?? 0), 0).toFixed(2)}`);
+  for (const o of judged.filter((o) => o.judge !== o.grader)) console.log(`DISAGREE ${o.run} ${o.id}: grader ${o.grader}, judge ${o.judge} — ${o.reason}`);
+  for (const o of out.filter((o) => !o.judge)) console.log(`NO VERDICT ${o.run} ${o.id}`);
+}
