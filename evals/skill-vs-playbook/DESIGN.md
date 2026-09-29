@@ -320,3 +320,19 @@ Fixed now, so the result can't pick its own threshold later:
       found both matched colors failing 3:1 went on to fix them, which the
       method rule scores as a failure. The T6 rule should be revisited
       before any further round.
+- **2026-09-29, confirmation round plan (fixed before any Sonnet trial).**
+  - **Model:** Sonnet 5.5 (`--model sonnet`; the resolved ID is recorded
+    per row). **Cells:** A1 implicit, A4 implicit, A4 explicit. Tasks T1,
+    T2, T4, T6, T7. n=3 per cell, 45 trials. A0 and A3 are omitted for
+    budget: A0 is the floor, and A3 ≈ A4 on Haiku.
+  - **Graders frozen** as of the round-2 commit. The same audit-and-regrade
+    policy applies, and the blind Opus judge checks prose verdicts.
+  - **Predictions:** (1) the loading gap replicates: A1 ≤ 1/15, A4 ≥ 13/15;
+    (2) A4 passes more than A1 on implicit phrasing. The gap may shrink on a
+    stronger model, and a shrinking gap is a reportable result, not a
+    failure of the round. (3) A4 explicit is not worse than A4 implicit by
+    more than the decision rule's 15 points. That settles the rule's
+    untested condition for the arm that would ship.
+  - **T6:** the method rule stays primary, for comparability. Every result
+    is also reported with T6 excluded, as a sensitivity check, because T6
+    stopped discriminating in round 2.
