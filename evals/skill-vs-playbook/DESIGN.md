@@ -219,3 +219,27 @@ Fixed now, so the result can't pick its own threshold later:
     (algorithm-consistent). T6 and T7 score *method*: did the agent work the
     way the playbook teaches. Report the two classes separately; a method
     failure is not a wrong answer.
+- **2026-09-29, after pilot batch 3 of 3 (grader validation):** three more
+  grader bugs, all fixed, with all 45 trials regraded:
+  - Algorithm detection missed the short flag `-t wcag2` (T1, T2).
+  - The final answer was taken from the last message only. Agents often
+    state the answer, run one closing command, then add a note, so the
+    answer now starts at the last text block before the final tool call.
+    This also flipped batch 2's A3-T7 to a pass: it had reported "deltaE 13"
+    before its closing command. The earlier manual audit of that row
+    (logged above as "computed ΔE but never reported it") was wrong for the
+    same reason.
+  - T4 now treats a klar warning printed on the line after a token's line as
+    that token's flag.
+- **Pilot result (Haiku 4.5, n=3 per cell, 45 trials, $2.68 at list price).**
+  Per the design, the pilot validates the harness and doesn't test the
+  hypotheses. Recorded here so the main round can be sized from it:
+  - Overall pass rate: A0 8/15, A1 7/15, A3 12/15.
+  - Guidance loaded: A1 0/15 (the pointer was never followed), A3 14/15.
+  - Outcome tasks (T1, T2, T4): A0 5/9, A1 7/9, A3 8/9.
+    Method tasks (T6, T7): A0 3/6, A1 0/6, A3 4/6.
+    Most of A3's lead over A1 comes from the method tasks.
+  - H3 (equal application once guidance is loaded) can't be evaluated: A1
+    never loaded the playbook.
+  - "Used klar" reads 14/15 for A1 and A3 only because one T4 trial in each
+    called klar inside `audit.sh` rather than directly.

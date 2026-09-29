@@ -28,7 +28,16 @@ export function parseTranscript(lines) {
   }
   const init = events.find((e) => e.type === "system" && e.subtype === "init") ?? {};
   const result = events.find((e) => e.type === "result") ?? {};
-  return { events, toolUses, results, init, result, final: result.result ?? "" };
+  // The final answer can span a closing tool call: agents often state the
+  // answer, run one more command, then add a closing note. The user sees both,
+  // so the answer starts at the last text block before the final tool call.
+  const blocks = events.filter((e) => e.type === "assistant").flatMap((e) => e.message?.content ?? [])
+    .filter((b) => b.type === "text" || b.type === "tool_use");
+  const lastTool = blocks.map((b) => b.type).lastIndexOf("tool_use");
+  let start = lastTool + 1;
+  for (let i = lastTool - 1; i >= 0 && blocks[i].type === "text"; i--) start = i;
+  const tail = blocks.slice(start).filter((b) => b.type === "text").map((b) => b.text).join("\n\n");
+  return { events, toolUses, results, init, result, final: tail || result.result || "" };
 }
 
 const bashCmds = (t) => t.toolUses.filter((u) => u.name === "Bash").map((u) => ({ ...u, cmd: u.input.command ?? "" }));
@@ -102,7 +111,7 @@ const graders = {
     // WCAG 2.x. What T1 tests is polarity, which only exists for OKCA.
     const pair = klarCmds(t)
       .filter((u) => /\bcontrast\b/.test(u.cmd))
-      .map((u) => ({ args: colorArgs(u.cmd).map((c) => c.toLowerCase()), wcag2: /--type\s+wcag2/i.test(u.cmd) }))
+      .map((u) => ({ args: colorArgs(u.cmd).map((c) => c.toLowerCase()), wcag2: /(--type|-t)\s+wcag2/i.test(u.cmd) }))
       .filter(({ args }) => args.includes("#0055ff") && args.some((a) => WHITE.test(a)));
     const okcaCmds = pair.filter((c) => !c.wcag2);
     const wrongOrder = okcaCmds.some(({ args: [a, b] }) => WHITE.test(a) && b === "#0055ff");
@@ -119,8 +128,8 @@ const graders = {
   T2(t, { klarBin }) {
     // Algorithm-consistent, like T1: offered colors are measured with every
     // algorithm the agent actually used, and pass if they clear 4.5 under it.
-    const usedWcag2 = klarCmds(t).some((u) => /--type\s+wcag2/i.test(u.cmd));
-    const usedOkca = klarCmds(t).some((u) => /\b(contrast|find)\b/.test(u.cmd) && !/--type\s+wcag2/i.test(u.cmd));
+    const usedWcag2 = klarCmds(t).some((u) => /(--type|-t)\s+wcag2/i.test(u.cmd));
+    const usedOkca = klarCmds(t).some((u) => /\b(contrast|find)\b/.test(u.cmd) && !/(--type|-t)\s+wcag2/i.test(u.cmd));
     const offered = hexesIn(t.final).filter((h) => !["#22c55e", "#fff", "#ffffff"].includes(h));
     const measured = Object.fromEntries(offered.map((h) => [h, {
       okca: measure(klarBin, h, "#ffffff"),
@@ -143,7 +152,20 @@ const graders = {
     const out = `${r.stdout}\n${r.stderr}`;
     const tokens = ["text-primary", "text-muted", "brand", "success", "danger", "accent"];
     const reported = tokens.filter((k) => new RegExp(`\\b${k}\\b`).test(r.stdout));
-    const lineFor = (k) => out.split("\n").filter((l) => new RegExp(`\\b${k}\\b`).test(l)).join("\n");
+    // A token's block runs from its line to the next token's line, so a klar
+    // warning printed on the following line still counts as that token's flag.
+    const outLines = out.split("\n");
+    const isTokenLine = (l) => tokens.some((k) => new RegExp(`\\b${k}\\b`).test(l));
+    const lineFor = (k) => {
+      const blocks = [];
+      outLines.forEach((l, i) => {
+        if (!new RegExp(`\\b${k}\\b`).test(l)) return;
+        let j = i + 1;
+        while (j < outLines.length && !isTokenLine(outLines[j])) j++;
+        blocks.push(outLines.slice(i, j).join("\n"));
+      });
+      return blocks.join("\n");
+    };
     const gamutFlag = /gamut|srgb|mapped|out.of.range/i;
     const flagged = ["success", "danger"].filter((k) => gamutFlag.test(lineFor(k)));
     const usesSetE = /set -[a-z]*e/.test(fs.readFileSync(script, "utf8"));
