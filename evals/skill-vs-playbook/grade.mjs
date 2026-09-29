@@ -5,6 +5,7 @@
 
 import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 // ---------- transcript parsing ----------
@@ -81,6 +82,12 @@ export function commonSignals(t, arm) {
         }
       : null,
     isError: t.result.is_error ?? null,
+    // Context on the first model call, before any tool use: the fixed cost
+    // of an arm's always-loaded guidance (H4), independent of turn count.
+    firstTurnContext: (() => {
+      const u = t.events.find((e) => e.type === "assistant" && e.message?.usage)?.message.usage;
+      return u ? (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) : null;
+    })(),
   };
 }
 
@@ -319,6 +326,28 @@ const graders = {
     // Provisional: the judge checks the full rule against the truth table.
     const pass = failingMentioned.length === failingFg.length && unflaggedClosest.length === 0 && costReported;
     return { pass, review: true, signals: { proposed: measured, unflaggedClosest, failingMentioned, costReported, wrongOrder, ranScript: bashCmds(t).some((u) => /\.sh\b/.test(u.cmd)) } };
+  },
+  // ---------- task suite 0.3: control ----------
+
+  T0(t, { projDir, env }) {
+    // Deterministic: the script must pass on the real files and fail when
+    // either file is corrupted. Each corruption is run on a scratch copy.
+    const pkgPath = path.join(projDir, "package.json");
+    let hasScript = false;
+    try { hasScript = !!JSON.parse(fs.readFileSync(pkgPath, "utf8")).scripts?.validate; } catch {}
+    const run = (dir) => spawnSync("npm", ["run", "-s", "validate"], { cwd: dir, env, encoding: "utf8", timeout: 60000 }).status;
+    const okOnGood = hasScript && run(projDir) === 0;
+    const failsOnBroken = hasScript && ["tokens.json", "tokens-system.json"].every((f) => {
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "t0-"));
+      for (const x of ["package.json", "tokens.json", "tokens-system.json"]) fs.copyFileSync(path.join(projDir, x), path.join(tmp, x));
+      for (const x of fs.readdirSync(projDir)) if (/\.(m?js|sh|cjs)$/.test(x)) fs.copyFileSync(path.join(projDir, x), path.join(tmp, x));
+      for (const d of ["scripts", "bin"]) if (fs.existsSync(path.join(projDir, d))) fs.cpSync(path.join(projDir, d), path.join(tmp, d), { recursive: true });
+      fs.writeFileSync(path.join(tmp, f), "{ not json");
+      const status = run(tmp);
+      fs.rmSync(tmp, { recursive: true, force: true });
+      return status !== 0;
+    });
+    return { pass: okOnGood && failsOnBroken, review: false, signals: { hasScript, okOnGood, failsOnBroken } };
   },
 };
 

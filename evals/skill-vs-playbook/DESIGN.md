@@ -451,3 +451,27 @@ Fixed now, so the result can't pick its own threshold later:
     19/27, p = 0.076.
   - **Still untested:** T0 (the context-cost control), and A0/A3 on 0.2
     tasks.
+- **2026-09-29, round 4 plan: closing the design (fixed before any round-4
+  trial).**
+  - **Part A, control (T0, task suite 0.3):** "Add an npm `validate` script
+    that fails if tokens.json or tokens-system.json is invalid JSON; run it."
+    No color work. Graded deterministically: the script must pass on the
+    real files and fail on a corrupted copy of each (self-tested 3/3).
+    Arms A0, A1, A2, A3, A4 on implicit phrasing, Sonnet 5.5, n=3: 15
+    trials. This is the first run of A2 (full CLAUDE.md snippet) at all.
+  - **Part B, workflow floor and full skill:** A0 (explicit, per the phrasing
+    rule) and A3 (implicit) on T3, T5, T8 and T9, Sonnet 5.5, n=3: 24
+    trials. Same graders, judge and adjudication procedure as round 3.
+  - **New measure:** `firstTurnContext`, the tokens in context on the first
+    model call. This is the fixed cost of an arm's always-loaded guidance,
+    independent of turn count. Backfilled for every earlier row; no verdict
+    changed.
+  - **Predictions:**
+    - (a) T0 pass rate is equal across arms (each ≥ 2/3).
+    - (b) False triggering on T0: skill loads ≤ 1/3 in each of A3 and A4;
+      playbook read 0/3 in A1 and A2; no klar calls in any arm.
+    - (c) H4: A2's mean first-turn context exceeds A0's by roughly the
+      snippet's size, more than A1, A3 or A4 add.
+    - (d) A3 is within one trial of A4 (11/12) on the workflow tasks.
+    - (e) A0 (no guidance) does no better than A1 (7/12) on the workflow
+      tasks.

@@ -1,5 +1,5 @@
 {
-  "version": "0.2",
+  "version": "0.3",
   "explicitPrefix": "Use the klar CLI (it's installed in this project) for this. ",
   "tasks": {
     "T1": {
@@ -50,8 +50,14 @@
       "trap": "composite-audit",
       "prompt": "Audit the color tokens in tokens-system.json. Check every foreground against every background it could sit on. For each failing pair, propose a fix and tell me how much it changes the color.",
       "truth": "7 of 10 pairs fail. Fixable by lightness: primary/surface -> #115bcc (dE 15), accent/surface -> #bf103f (dE 13), success/surface-dark -> #41d870 (dE 5), muted/surface-dark -> #919191 (dE 17). Not fixable by lightness (find exits 1): success/surface, primary/surface-dark, accent/surface-dark; closest attempts #00ba54, #438aff, #fd5870 all still fail."
+    },
+    "T0": {
+      "control": true,
+      "trap": "none (control: false triggering and context cost)",
+      "prompt": "Add an npm script called `validate` to package.json that fails if tokens.json or tokens-system.json is not valid JSON. Run it to show it works.",
+      "truth": "Pass iff `npm run validate` exits 0 on the fixture and non-zero when either file is corrupted. No color work is needed; klar should not be called and color guidance should not be loaded."
     }
   },
   "okcaStandard": "We measure contrast with OKCA, foreground on background, at WCAG AA thresholds (body text 4.5).",
-  "_note": "0.2 adds T3, T5, T8, T9. T1-T7 are unchanged. Tasks with okca: true get okcaStandard prepended, identically in every arm; klar is not named."
+  "_note": "0.2 adds T3, T5, T8, T9 (okca: true gets okcaStandard prepended, identically in every arm; klar is not named). 0.3 adds T0, a non-color control. T1-T9 unchanged."
 }

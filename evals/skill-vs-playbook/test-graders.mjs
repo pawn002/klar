@@ -25,4 +25,27 @@ for (const [task, label, want, final] of cases) {
   if (!ok) bad++;
   console.log(`${ok ? "ok  " : "BAD "} ${task} ${label}: pass=${g.pass}  ${JSON.stringify(g.signals).slice(0, 220)}`);
 }
-process.exit(bad ? 1 : 0);
+if (bad) process.exit(1);
+
+// T0: build three throwaway projects and grade them.
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+const mk = (script) => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), "t0-test-"));
+  for (const f of ["tokens.json", "tokens-system.json"]) fs.copyFileSync(new URL(`./fixtures/${f}`, import.meta.url), path.join(d, f));
+  fs.writeFileSync(path.join(d, "package.json"), JSON.stringify({ name: "x", private: true, scripts: script ? { validate: script } : {} }));
+  return d;
+};
+const t0 = [
+  ["good", true, `node -e "for (const f of ['tokens.json','tokens-system.json']) JSON.parse(require('fs').readFileSync(f,'utf8'))"`],
+  ["trap: always succeeds", false, "echo ok"],
+  ["trap: no script", false, null],
+];
+let bad0 = 0;
+for (const [label, want, script] of t0) {
+  const g = grade({ task: "T0", arm: "A1", lines: tr("done"), projDir: mk(script), env: process.env, klarBin });
+  if (g.pass !== want) bad0++;
+  console.log(`${g.pass === want ? "ok  " : "BAD "} T0 ${label}: pass=${g.pass} ${JSON.stringify(g.signals)}`);
+}
+if (bad0) process.exit(1);
