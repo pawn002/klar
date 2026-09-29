@@ -13,7 +13,99 @@ summary.
 
 ## Results
 
-<!-- RESULTS -->
+**Bottom line:** ship the guidance as a thin skill that points to the
+playbook, not as a `CLAUDE.md` pointer. The pointer is never followed, and
+on hard tasks it does worse than no guidance at all.
+
+222 trials across Haiku 4.5 and Sonnet 5.5; 0 infra errors; 0 contaminated
+trials. The 180 judge calls agreed with the rule-based grader on 158 at
+first pass; every override is recorded in `review/adjudications.json`.
+
+### 1. Discovery: the pointer is never followed
+
+| Guidance loaded, all color tasks | |
+|---|---|
+| A1 `CLAUDE.md` pointer → playbook | **0 / 69** |
+| A4 thin skill → playbook | **69 / 69** |
+| A3 full skill (playbook as skill body) | 37 / 42 |
+
+This held on both models and both phrasings (p ≈ 1e-40, Fisher exact). The
+full skill fired less reliably than the thin one: it missed mostly when the
+prompt said "use klar", and every miss failed its task.
+
+### 2. Outcomes depend on task difficulty and model
+
+| Tasks | Model | A1 pointer | A4 thin skill | p |
+|---|---|---|---|---|
+| Single-step traps (T1–T7), implicit | Haiku | 6/15 | 12/15 | 0.06 |
+| Single-step traps (T1–T7), implicit | Sonnet | 12/15 | 14/15 | 0.60 |
+| Workflows (T3, T5, T8, T9), implicit | Sonnet | 7/12 | 11/12 | 0.15 |
+| Workflows, explicit ("use klar") | Sonnet | 7/12 | 12/12 | 0.037 |
+
+On the single-step traps, Sonnet reaches the ceiling without the playbook.
+On multi-step workflows it doesn't. The pre-registered decision rule
+(the skill beats the pointer by ≥15 points) is met on Haiku and on Sonnet
+workflows, and not met on Sonnet single-step tasks (13 points).
+
+### 3. On hard tasks, a pointer is worse than no guidance
+
+With the prompt held fixed at "use klar", only the guidance varies:
+
+| Workflow tasks, Sonnet | T3 | T5 | T8 | T9 | All |
+|---|---|---|---|---|---|
+| A0 no guidance | 3/3 | 3/3 | 3/3 | 3/3 | 12/12 |
+| A1 `CLAUDE.md` pointer | 0/3 | 1/3 | 3/3 | 3/3 | 7/12 |
+| A4 thin skill | 3/3 | 3/3 | 3/3 | 3/3 | 12/12 |
+
+The mechanism is visible on T3, the dark-mode brand tradeoff.
+
+- All three unguided agents read `klar find --help`, which says
+  "contrast is a design decision, not a computation". All three asked the
+  user to sign off on desaturating the brand color.
+- No pointer agent read the help. The snippet had already given them
+  `find`'s syntax, so they went straight to `--allow-desaturation` and
+  presented the result as settled.
+- The thin-skill agents read the playbook, which carries the same rule.
+  All three escalated.
+
+**A pointer supplies enough syntax to skip the documentation that carries
+the judgment.** klar's own help text did the playbook's job for agents that
+read it.
+
+### 4. What the guidance adds on capable models is judgment
+
+On every model, agents without the playbook computed correct colors. What
+they lacked was *method* and *authority*:
+
+- None of them reached for ΔE to answer "did it change much?" (T7).
+- They made brand decisions that belonged to a human (T3).
+
+### 5. Cost of always-loaded guidance (control task T0)
+
+On a non-color task, no skill fired (0/15) and no playbook was read (0/15).
+
+| Arm | Context on the first model call, vs no guidance |
+|---|---|
+| A3 / A4 skill (description only) | +102 tokens |
+| A1 minimal `CLAUDE.md` pointer | +461 tokens |
+| A2 full `CLAUDE.md` snippet | +1,585 tokens |
+
+The overhead is real in tokens and negligible in dollars: per-trial cost is
+driven by turn count. What always-loaded guidance costs is context-window
+share.
+
+### Pre-registered predictions
+
+| Prediction | Outcome |
+|---|---|
+| Skills load more often than the pointer (H2) | ✓ 69/69 vs 0/69 |
+| Given loading, application is equal (H3) | Untestable: the pointer never loaded |
+| The full snippet costs the most context on unrelated work (H4) | ✓ +1,585 tokens |
+| Thin skill ≈ full skill (round 2, round 4) | ✓ 12/15 vs 12/15; 11/12 vs 12/12 |
+| Skill beats pointer by ≥15 points on Sonnet workflows (round 3) | ✓ +33 points, p = 0.15 |
+| Skill beats pointer by ≥15 points on Sonnet single-step tasks | ✗ +13 points |
+| No guidance does no better than the pointer on workflows (round 4) | ✗ falsified: the pointer does *worse* |
+
 
 ## Method
 

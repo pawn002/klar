@@ -489,3 +489,48 @@ Fixed now, so the result can't pick its own threshold later:
   `reason`/`resolvableBy` messages carry that load? No directional
   prediction is registered for 4b, because this cell exists because of what
   batch 1 showed, and a prediction written now would be informed by it.
+- **2026-09-29, round 4 and 4b results (Sonnet 5.5).**
+  - **Round 4 T0 control (15 trials):** predictions (a)–(c) ✓.
+    - Every arm passed; skills fired 0/15, the playbook was read 0/15, and
+      klar was never called.
+    - First-turn context over A0: A2 +1,585 tokens, A1 +461, A3/A4 +102.
+      H4 holds in tokens but is negligible in dollars: per-trial cost is
+      dominated by turn count, and A2 averaged slightly *cheaper* than A0.
+      The cost is context-window share, not money.
+  - **Round 4 workflows (24 trials):** (d) ✓ (A3 12/12 vs A4 11/12). (e) is
+    falsified as stated: A0-explicit 12/12 vs A1-implicit 7/12, confounded
+    by phrasing, as the amendment anticipated.
+  - **Round 4b (24 trials, the de-confounded cell):** on workflow tasks
+    with the explicit "use klar" prompt, only the guidance varies. A0 (no
+    guidance) 12/12, A4 (thin skill) 12/12, **A1 (CLAUDE.md pointer)
+    7/12**; A0 vs A1 p = 0.037. The pointer does worse than *no guidance*.
+  - **Mechanism, on T3 (the gap is 3/3 vs 0/3):**
+    - All three A0 agents ran `klar find --help`, whose text reads
+      "contrast is a design decision, not a computation. Pass
+      --allow-desaturation where that decision has already been made."
+      All three then escalated.
+    - None of the three A1 agents read any help. The snippet had already
+      given them `find`'s syntax, so they went straight to
+      `--allow-desaturation` and shipped the result.
+    - A4 agents read no help either, but read the playbook, which carries
+      the same rule. They passed 3/3.
+    - The pointer supplied enough syntax to skip the page that carried the
+      judgment. On T5 the mechanism is different: A1 agents *did* read
+      help (3/3) and still failed 2/3, with the contested
+      build-your-own-grid behavior. An exploration hypothesis, checked
+      across all tasks, did not hold: help-reading was similar overall
+      (A0 12/12, A1 9/12).
+  - **Judge:** round 4 19/24 and round 4b 17/24 first-pass agreement. All
+    12 judge verdicts were accepted after checking them (quotes verified for
+    both round-4 T3 deferrals). In 4b the judge *failed* two A1-T3 answers
+    the provisional regex had passed: the regex fired on "let me know"
+    about token-file placement, which isn't a brand hand-back. Logged as a
+    known false-positive mode of the escalation regex. The judge passed a
+    4b A1-T5 that explicitly labelled its grid a substitute; round-3 A1-T5
+    answers presented theirs as the requested grid and failed. The rule
+    draws that line, and both verdicts follow it.
+  - **Process note:** one round-4 commit swept in round 4b's in-progress
+    transcripts; the complete files replaced them in the next commit.
+  - **Eval totals:** 222 trials, $19.39 at list price; 180 judge calls,
+    $10.35; 0 infra errors; 0 contaminated trials. Guidance loaded on color
+    tasks: pointer 0/69, thin skill 69/69 (p ≈ 1e-40), full skill 37/42.
