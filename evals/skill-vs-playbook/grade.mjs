@@ -97,11 +97,23 @@ function near(text, needle, pattern, radius = 160) {
 
 const graders = {
   T1(t) {
-    const orders = klarCmds(t).filter((u) => /\bcontrast\b/.test(u.cmd)).map((u) => colorArgs(u.cmd).map((c) => c.toLowerCase()));
-    const wrongOrder = orders.some(([a, b]) => a && b && WHITE.test(a) && b === "#0055ff");
-    const rightOrder = orders.some(([a, b]) => a === "#0055ff" && b && WHITE.test(b));
-    const pass = /\b4\.3\b/.test(t.final) && FAIL_WORDS.test(t.final);
-    return { pass, review: true, signals: { wrongOrder, rightOrder, reports43: /\b4\.3\b/.test(t.final) } };
+    // Algorithm-consistent scoring (decided 2026-09-29, see DESIGN changelog):
+    // an agent that chooses --type wcag2 and says "passes, 5.6" is correct under
+    // WCAG 2.x. What T1 tests is polarity, which only exists for OKCA.
+    const pair = klarCmds(t)
+      .filter((u) => /\bcontrast\b/.test(u.cmd))
+      .map((u) => ({ args: colorArgs(u.cmd).map((c) => c.toLowerCase()), wcag2: /--type\s+wcag2/i.test(u.cmd) }))
+      .filter(({ args }) => args.includes("#0055ff") && args.some((a) => WHITE.test(a)));
+    const okcaCmds = pair.filter((c) => !c.wcag2);
+    const wrongOrder = okcaCmds.some(({ args: [a, b] }) => WHITE.test(a) && b === "#0055ff");
+    const rightOrder = okcaCmds.some(({ args: [a, b] }) => a === "#0055ff" && WHITE.test(b));
+    const ranWcag2 = pair.some((c) => c.wcag2);
+    const reports43 = /\b4\.3\b/.test(t.final);
+    const reports56 = /\b5\.6\b/.test(t.final);
+    const okcaOk = reports43 && rightOrder && FAIL_WORDS.test(t.final);
+    const wcag2Ok = reports56 && !reports43 && ranWcag2 && /\b(pass(es)?|meets?|yes)\b/i.test(t.final) && !FAIL_WORDS.test(t.final);
+    const pass = !wrongOrder && (okcaOk || wcag2Ok);
+    return { pass, review: true, signals: { algorithm: okcaOk ? "okca" : wcag2Ok ? "wcag2" : ranWcag2 ? "wcag2?" : "okca?", wrongOrder, rightOrder, reports43, reports56 } };
   },
 
   T2(t, { klarBin }) {
@@ -136,21 +148,24 @@ const graders = {
   },
 
   T6(t) {
-    const matchCall = klarCmds(t).find((u) => /\bmatch\b/.test(u.cmd));
-    let matched = null;
-    if (matchCall) {
-      const raw = t.results.get(matchCall.id) ?? "";
-      try { matched = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)).colors?.map((c) => c.toLowerCase()); } catch {}
-      if (!matched) matched = hexesIn(raw);
-    }
-    const idx = matchCall ? t.toolUses.indexOf(t.toolUses.find((u) => u.id === matchCall.id)) : -1;
+    // An agent may run exploratory `match` calls first. Grade against the call
+    // whose output the answer actually reports; fall back to the last one.
+    const parse = (u) => {
+      const raw = t.results.get(u.id) ?? "";
+      try { return JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)).colors?.map((c) => c.toLowerCase()); } catch { return hexesIn(raw); }
+    };
+    const calls = klarCmds(t).filter((u) => /\bmatch\b/.test(u.cmd)).map((u) => ({ u, colors: parse(u) ?? [] }));
+    const lower = t.final.toLowerCase();
+    const chosen = calls.find((c) => c.colors.length && c.colors.every((m) => lower.includes(m))) ?? calls.at(-1);
+    const matched = chosen?.colors ?? null;
+    const idx = chosen ? t.toolUses.findIndex((u) => u.id === chosen.u.id) : -1;
     const reverified =
-      !!matched &&
+      !!matched?.length &&
       t.toolUses.slice(idx + 1).some((u) => u.name === "Bash" && /\bcontrast\b/.test(u.input.command ?? "") && matched.some((m) => (u.input.command ?? "").toLowerCase().includes(m)));
-    const reportsMatched = !!matched?.length && matched.every((m) => t.final.toLowerCase().includes(m));
-    const reportsFailure = FAIL_WORDS.test(t.final);
+    const reportsMatched = !!matched?.length && matched.every((m) => lower.includes(m));
+    const reportsFailure = FAIL_WORDS.test(t.final) || /\bmiss(es|ed)?\b|\bshort\b|❌|neither/i.test(t.final);
     const pass = reportsMatched && reverified && reportsFailure;
-    return { pass, review: true, signals: { matchRan: !!matchCall, matched, reportsMatched, reverified, reportsFailure } };
+    return { pass, review: true, signals: { matchCalls: calls.length, matched, reportsMatched, reverified, reportsFailure } };
   },
 
   T7(t) {

@@ -184,3 +184,22 @@ Fixed now, so the result can't pick its own threshold later:
     shows `klar contrast <fg> <bg>`, and that was enough for T1. So A1's
     "guidance loaded" undercounts the guidance the agent actually had. The
     pilot reports outcome by arm regardless of load status.
+- **2026-09-29, after pilot batch 1 of 3 (grader validation, which the pilot
+  exists for; no hypothesis read from it):**
+  - **T6 grader bug fixed.** Two correct answers were failed: one wrote
+    "just misses" / "neither quite clears", which the failure-word check
+    missed; the other ran an exploratory `match` call first, and the grader
+    parsed that one. The grader now uses the `match` call whose output the
+    answer reports. Regrading changed exactly those two rows.
+  - **T1 scoring changed to algorithm-consistent (author's decision).**
+    Without guidance, A0 read "WCAG AA", ran `--type wcag2`, got 5.6 and said
+    it passes. That's correct under WCAG 2.x. A pass now requires the verdict
+    to match the algorithm the agent ran, with OKCA measured in fg/bg order.
+    Algorithm choice is recorded as its own signal. Reason: the eval
+    shouldn't grade its author's algorithm preference as correctness.
+  - **T7 unchanged: ΔE required (author's decision).** A0 and A1 answered
+    "noticeable darkening" from OKLCH components. That's a reasonable verdict
+    reached without the perceptual metric. T7 is kept as a test of whether
+    guidance changes method, and the post must say so.
+  - Batch 1 rows are regraded from the saved transcripts
+    (`rows.regraded.jsonl`); the run-time rows are kept.

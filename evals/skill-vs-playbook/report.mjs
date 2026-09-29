@@ -8,8 +8,13 @@ import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const runs = process.argv.slice(2);
+// Prefer regraded rows (current graders) over the rows written at run time.
+const rowsFile = (r) => {
+  const re = path.join(HERE, "results", r, "rows.regraded.jsonl");
+  return fs.existsSync(re) ? re : path.join(HERE, "results", r, "rows.jsonl");
+};
 const rows = runs.flatMap((r) =>
-  fs.readFileSync(path.join(HERE, "results", r, "rows.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)),
+  fs.readFileSync(rowsFile(r), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)),
 );
 
 const ok = rows.filter((r) => r.status === "ok");
