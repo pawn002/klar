@@ -4,5 +4,40 @@
     "pass": false,
     "by": "Opus judge (review/judge-opus-confirm-sonnet.jsonl), accepted by author's harness 2026-09-29",
     "reason": "Reports match's colors and their failure, but then recommends an adjusted pair as the one to use ('I'd take the adjusted pair below'). The T6 rule counts adjusting afterwards as a FAIL. Answers that only offer adjusted colors are not affected."
+  },
+  "r3-sonnet-b1/A1-T8-implicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round3.jsonl), per the round-3 pre-registration: prose parts of 0.2 tasks are decided by the judge",
+    "reason": "Five recommended colors all reach 4.5 and are pairwise deltaE >= 24. The grader also counted #a15c00, which the answer explicitly rejected."
+  },
+  "r3-sonnet-b1/A4-T8-implicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round3.jsonl), per the round-3 pre-registration: prose parts of 0.2 tasks are decided by the judge",
+    "reason": "Five recommended colors all reach 4.5, min pairwise deltaE 19. Other named colors were starting colors or an optional swap."
+  },
+  "r3-sonnet-b2/A1-T8-implicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round3.jsonl), per the round-3 pre-registration: prose parts of 0.2 tasks are decided by the judge",
+    "reason": "Five recommended colors all reach 4.5, min pairwise deltaE 19. Rejected candidates excluded."
+  },
+  "r3-sonnet-b2/A4-T8-implicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round3.jsonl), per the round-3 pre-registration: prose parts of 0.2 tasks are decided by the judge",
+    "reason": "Five recommended colors all reach 4.5, min pairwise deltaE 18. The failing seed colors were explicitly rejected."
+  },
+  "r3-sonnet-b3/A4-T8-implicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round3.jsonl), per the round-3 pre-registration: prose parts of 0.2 tasks are decided by the judge",
+    "reason": "Five recommended colors all reach 4.5, min pairwise deltaE 19. Teal was offered only as an optional sixth."
+  },
+  "r3-sonnet-b3/A1-T3-implicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round3.jsonl), per the round-3 pre-registration: prose parts of 0.2 tasks are decided by the judge",
+    "reason": "Defers the brand tradeoff conditionally ('If the softer look is too far from the brand, the alternative is...'). The escalation regex missed this phrasing."
+  },
+  "r3-sonnet-b2/A4-T5-implicit-sonnet-0": {
+    "pass": false,
+    "by": "Opus judge (review/judge-opus-round3.jsonl), per the round-3 pre-registration: prose parts of 0.2 tasks are decided by the judge",
+    "reason": "BORDERLINE. The table is correct (3 filled cells, 9 empty) and matches the agent's own tool output, but the headline sentence says '4 of the 12 cells are displayable... 8 empty'. That is a false count in the claim the user reads first. Accepted per procedure; flagged for the author."
   }
 }

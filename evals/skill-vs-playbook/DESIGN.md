@@ -404,3 +404,50 @@ Fixed now, so the result can't pick its own threshold later:
       background. T9's `wrongOrder` signal is reported per arm.
   - **Still untested after this round:** T0 (the always-loaded context-cost
     control) and every A0/A3 cell on 0.2 tasks.
+- **2026-09-29, round 3 result (workflow tasks, OKCA stated; Sonnet 5.5,
+  n=3 per cell, 24 trials, $2.92 at list price, plus $1.73 for the judge).**
+  - **Grader fixes found in the audit** (all rounds regraded; no earlier
+    verdict changed):
+    - The cost check now reads a ΔE *table column*. A1-T9 reported every
+      cost that way and had been failed.
+    - T8's judge facts now include the full pairwise ΔE matrix, so
+      distinctness is checked among the recommended colors only.
+  - **Judge:** 17/24 agreement with the provisional grader, as expected
+    under the pre-registered design, where the judge decides prose parts.
+    All 7 judge verdicts were accepted and recorded in
+    `review/adjudications.json`:
+    - 5 × T8: rejected candidates had been counted as recommendations.
+    - A1-T3 b3: a conditional deferral the escalation regex missed.
+    - A4-T5 b2 (borderline): a correct table, but the headline miscounts
+      the cells ("4 of 12"). Flagged for the author.
+  - **Results:** A1 7/12, A4 11/12. By task: T3 1/3 vs 3/3; T5 0/3 vs 2/3;
+    T8 3/3 each; T9 3/3 each.
+  - **Predictions, as pre-registered:**
+    - (1) The loading gap replicates: A1 0/12, A4 12/12, p = 7e-7 ✓.
+    - (2) A4 beats A1 by ≥15 points on workflow tasks: +33 points (92% vs
+      58%) ✓ on the pre-registered measure, p = 0.15 at n=12. Excluding T5
+      (see caveat): 9/9 vs 7/9, +22 points, p = 0.47. The Sonnet shortfall
+      in the confirmation round is attributed to task difficulty, as the
+      plan specified, with the small-n caveat.
+    - (3) OKCA use: no reversed argument order in either arm (T9
+      `wrongOrder` 0/3 each). Every agent measured foreground on
+      background under the stated standard.
+  - **Where the gap is:** T3, the brand tradeoff. All six agents applied
+    `--allow-desaturation` to find a passing color. With the playbook, all
+    three then asked for brand sign-off. Without it, two of three presented
+    the desaturated color as settled, which is the exact failure the
+    playbook's "never resolve a brand tradeoff unilaterally" rule exists
+    to prevent.
+  - **T5 caveat:** A1 agents saw the empty cells, then built their own
+    in-gamut 4×3 grid with different chroma steps, and marked every cell
+    correctly. The T5 rule fails that as "made-up colors as grid cells".
+    It's defensible, since the grid they present is not the one klar's
+    fixed-step mode defines, but a designer might prefer their answer. The
+    write-up should show results with and without T5.
+  - **Pooled across all rounds:** the CLAUDE.md pointer led to the playbook
+    in 0/57 trials; the thin skill loaded in 57/57 (p = 1e-13). The full
+    skill (A3) loaded in 25/30, less reliably than the thin one. On Sonnet,
+    pooling A4 vs A1 on implicit phrasing (confirmation + round 3): 25/27 vs
+    19/27, p = 0.076.
+  - **Still untested:** T0 (the context-cost control), and A0/A3 on 0.2
+    tasks.
