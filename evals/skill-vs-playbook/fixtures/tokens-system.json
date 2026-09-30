@@ -1,0 +1,14 @@
+{
+  "backgrounds": {
+    "surface": "#ffffff",
+    "surface-dark": "#1a1a2e"
+  },
+  "foregrounds": {
+    "text": "#1a1a2e",
+    "primary": "#3b82f6",
+    "accent": "#e94560",
+    "success": "#22c55e",
+    "muted": "#666666",
+    "inverse": "#ffffff"
+  }
+}

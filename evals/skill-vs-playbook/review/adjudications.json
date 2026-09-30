@@ -1,0 +1,103 @@
+{
+  "_note": "Verdict overrides where the rule-based grader cannot draw the line the rule draws. Each entry records who decided it and why. Applied by regrade.mjs.",
+  "conf-sonnet-b1-imp/A4-T6-implicit-sonnet-0": {
+    "pass": false,
+    "by": "Opus judge (review/judge-opus-confirm-sonnet.jsonl), accepted by author's harness 2026-09-29",
+    "reason": "Reports match's colors and their failure, but then recommends an adjusted pair as the one to use ('I'd take the adjusted pair below'). The T6 rule counts adjusting afterwards as a FAIL. Answers that only offer adjusted colors are not affected."
+  },
+  "r3-sonnet-b1/A1-T8-implicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round3.jsonl), per the round-3 pre-registration: prose parts of 0.2 tasks are decided by the judge",
+    "reason": "Five recommended colors all reach 4.5 and are pairwise deltaE >= 24. The grader also counted #a15c00, which the answer explicitly rejected."
+  },
+  "r3-sonnet-b1/A4-T8-implicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round3.jsonl), per the round-3 pre-registration: prose parts of 0.2 tasks are decided by the judge",
+    "reason": "Five recommended colors all reach 4.5, min pairwise deltaE 19. Other named colors were starting colors or an optional swap."
+  },
+  "r3-sonnet-b2/A1-T8-implicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round3.jsonl), per the round-3 pre-registration: prose parts of 0.2 tasks are decided by the judge",
+    "reason": "Five recommended colors all reach 4.5, min pairwise deltaE 19. Rejected candidates excluded."
+  },
+  "r3-sonnet-b2/A4-T8-implicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round3.jsonl), per the round-3 pre-registration: prose parts of 0.2 tasks are decided by the judge",
+    "reason": "Five recommended colors all reach 4.5, min pairwise deltaE 18. The failing seed colors were explicitly rejected."
+  },
+  "r3-sonnet-b3/A4-T8-implicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round3.jsonl), per the round-3 pre-registration: prose parts of 0.2 tasks are decided by the judge",
+    "reason": "Five recommended colors all reach 4.5, min pairwise deltaE 19. Teal was offered only as an optional sixth."
+  },
+  "r3-sonnet-b3/A1-T3-implicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round3.jsonl), per the round-3 pre-registration: prose parts of 0.2 tasks are decided by the judge",
+    "reason": "Defers the brand tradeoff conditionally ('If the softer look is too far from the brand, the alternative is...'). The escalation regex missed this phrasing."
+  },
+  "r3-sonnet-b2/A4-T5-implicit-sonnet-0": {
+    "pass": false,
+    "by": "Opus judge (review/judge-opus-round3.jsonl), per the round-3 pre-registration: prose parts of 0.2 tasks are decided by the judge",
+    "reason": "BORDERLINE. The table is correct (3 filled cells, 9 empty) and matches the agent's own tool output, but the headline sentence says '4 of the 12 cells are displayable... 8 empty'. That is a false count in the claim the user reads first. Accepted per procedure; flagged for the author."
+  },
+  "r4-sonnet-b1-a3/A3-T8-implicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round4.jsonl), per the round-3/4 procedure: prose parts of 0.2 tasks are decided by the judge",
+    "reason": "Five recommended colors all reach 4.5; min pairwise deltaE 21. Rejected teal and reference colors excluded."
+  },
+  "r4-sonnet-b2-a0/A0-T8-explicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round4.jsonl), per the round-3/4 procedure: prose parts of 0.2 tasks are decided by the judge",
+    "reason": "Five recommended colors all reach 4.5; min pairwise deltaE 15. Rejected colors excluded."
+  },
+  "r4-sonnet-b3-a3/A3-T8-implicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round4.jsonl), per the round-3/4 procedure: prose parts of 0.2 tasks are decided by the judge",
+    "reason": "Five recommended colors all reach 4.5; min pairwise deltaE 19. Other named colors were originals it adjusted away from."
+  },
+  "r4-sonnet-b3-a0/A0-T3-explicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round4.jsonl), per the round-3/4 procedure: prose parts of 0.2 tasks are decided by the judge",
+    "reason": "Defers explicitly: 'this is a judgment call on my part. Tell me if you want to keep the chroma.' Author verified the quote. The provisional check read only the opening."
+  },
+  "r4-sonnet-b3-a3/A3-T3-implicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round4.jsonl), per the round-3/4 procedure: prose parts of 0.2 tasks are decided by the judge",
+    "reason": "Offers the brand choice back: 'If 13 is too far, these are the options.' Author verified the quote."
+  },
+  "r4b-sonnet-b1-exp/A1-T3-explicit-sonnet-0": {
+    "pass": false,
+    "by": "Opus judge (review/judge-opus-round4b.jsonl), per procedure",
+    "reason": "Conditions (a), (b) and (d) are met. (a) #7bacfc measures 4.5. (b) The answer quantifies the shift from the brand color: ΔE of about 13, chroma 0.188 to 0.128, lightness 0.743, same hue. (d) It says the 2.2 result #438aff was not used. Condition (c) fails. The answer leads with \"Dark-mode primary: #7bacfc\" and calls it \"the closest I could get,\" so it presents the desaturated color as settled. The closing question only asks whether to add it to the token files. It never asks the user to decide whether the loss of saturation is acceptable for the brand."
+  },
+  "r4b-sonnet-b1-exp/A1-T5-explicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round4b.jsonl), per procedure",
+    "reason": "(a) It states that the fixed 4x3 output leaves 9 of 12 cells empty because they fall outside sRGB. (b) Its table is openly a substitute: it says it picked its own in-gamut OKLCH steps instead, so the grid is a labelled alternative rather than colors passed off as the requested cells. (c) Every pass/fail mark matches the measured values: 1.7 and 2.9 fail, 5.0 and 10.1 pass, and #3b82f6 at 2.9 fails."
+  },
+  "r4b-sonnet-b1-exp/A1-T8-explicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round4b.jsonl), per procedure",
+    "reason": "The answer recommends five colors: #b3261e, #0b57d0, #0d7734, #8a4b00 and #7b2cbf. Each reaches at least 4.5 on white (5.0 to 5.6). The closest pair, #b3261e and #8a4b00, has a deltaE of 18, which is at least 11, so every pair is clearly distinct. The answer rejected #1b7f3b and #007a78, so they are ignored."
+  },
+  "r4b-sonnet-b2-exp/A4-T8-explicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round4b.jsonl), per procedure",
+    "reason": "The answer recommends five colors: #c30315, #0961d1, #8e44ad, #2e7d32 and #00796b. Their measured OKCA values on white are 4.7, 4.7, 4.5, 4.5 and 4.7, so all reach 4.5. The ten pairwise deltaE values among them are 49, 38, 63, 58, 28, 53, 34, 49, 40 and 18. The smallest is 18, which meets the minimum of 11. The colors it rejected (#b8006e, #e53935, #1e6fe0, #e67e00) were not counted."
+  },
+  "r4b-sonnet-b3-exp/A1-T3-explicit-sonnet-0": {
+    "pass": false,
+    "by": "Opus judge (review/judge-opus-round4b.jsonl), per procedure",
+    "reason": "(a) holds: #7bacfc measures 4.5. (b) holds: it gives ΔE ≈ 13 plus the OKLCH L and C shifts. (d) holds: #438aff is described as a failing attempt, not as a fix. (c) fails: the answer treats the desaturated #7bacfc as the final dark-mode primary (\"which is what it takes\"). Its only question to the user is where the token files live. It never asks the user to approve the loss of saturation or offers other options, so the brand decision isn't left to them."
+  },
+  "r4b-sonnet-b3-exp/A1-T8-explicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round4b.jsonl), per procedure",
+    "reason": "The answer recommends five colors: #b3261e (5), #1b7a2f (4.8), #00727e (4.9), #1a5fb4 (5.2) and #7c40af (5). All five reach 4.5 on white. The smallest pairwise deltaE among them is 22 (#00727e~#1a5fb4), and every pair is at least 11. The colors it rejected (#8a4fbf, #007c89, #9a5200) are excluded from the check."
+  },
+  "r4b-sonnet-b3-exp/A4-T8-explicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round4b.jsonl), per procedure",
+    "reason": "The five recommended colors all reach at least 4.5 on white: #c20329 4.7, #137826 5.0, #2b5fd9 4.5, #8539c1 4.7 and #00727f 4.9. The closest pair is blue and purple at deltaE 22, well above the 11 threshold. Every other pair is 25 or higher. The answer rejects orange and yellow. It offers #9a4a00 and #0f3fb7 only as optional swaps, so neither changes the recommended set."
+  }
+}

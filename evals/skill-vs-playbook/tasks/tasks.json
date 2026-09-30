@@ -1,0 +1,63 @@
+{
+  "version": "0.3",
+  "explicitPrefix": "Use the klar CLI (it's installed in this project) for this. ",
+  "tasks": {
+    "T1": {
+      "trap": "polarity",
+      "prompt": "Quick check: can we use #0055ff for body text on a white background? It needs to meet WCAG AA.",
+      "truth": "fg/bg OKCA 4.3 -> fails AA body text. Reversed order gives 4.5 (false pass)."
+    },
+    "T2": {
+      "trap": "find-exit-1",
+      "prompt": "Our brand green #22c55e needs to work as body text on a white background (WCAG AA). Give me the closest on-brand version that passes.",
+      "truth": "find exits 1 (lightness-exhausted), prints #00ba54 at 2.2. A passing fix needs a chroma cut, deltaE ~22 from brand; that cost must be reported."
+    },
+    "T4": {
+      "trap": "gamut-set-e",
+      "prompt": "Our design tokens are in tokens.json. Write a shell script, audit.sh, that we can run in CI (it must use `set -euo pipefail`). It should check every foreground token against the background for WCAG AA body text and print a result line for each token. Run it and tell me what it found.",
+      "truth": "success and danger are outside sRGB (contrast exits 1). A bare $(...) assignment aborts under set -e. Script must report all 6 tokens and flag the 2 out-of-gamut ones."
+    },
+    "T6": {
+      "trap": "match-rebuilds-first-arg",
+      "prompt": "Match the saturation of our two accent colors, #3b82f6 and #e94560, so they feel like a set. Give me the final hex values and tell me whether each one still works as large text on white (3:1).",
+      "truth": "match returns #3481fd for the blue (not #3b82f6) and keeps #e94560. On white: #3481fd 2.9, #e94560 2.8 -> both fail 3:1."
+    },
+    "T7": {
+      "trap": "deltaE-not-contrast",
+      "prompt": "Our designer nudged the coral #e94560 to #bf103f so it would pass contrast. Did the color change much, visually?",
+      "truth": "deltaE 2000 = 13 -> clearly different. A contrast ratio does not answer this."
+    },
+    "T3": {
+      "okca": true,
+      "trap": "brand-tradeoff-dark-mode",
+      "prompt": "We're adding dark mode. Our primary color #3b82f6 is used for body text, and on the dark surface #1a1a2e it has to pass. Give me the dark-mode version of it, as close to the brand color as possible.",
+      "truth": "#3b82f6 on #1a1a2e = 1.9. find exits 1 (lightness-exhausted), closest #438aff at 2.2. Passing fix needs a chroma cut: e.g. #7bacfc at 4.5, deltaE 13 from brand. Must report the cost and leave the brand call to a human; must not present #438aff as the fix."
+    },
+    "T5": {
+      "okca": true,
+      "trap": "fixed-step-empty-cells",
+      "prompt": "Give me a 4x3 grid of shades of #3b82f6: 4 lightness steps by 3 chroma steps. Mark which ones pass for body text on white.",
+      "truth": "Fixed-step grid: 9 of 12 cells empty (outside sRGB). Real cells: #6b88b6 2.9 fail, #3b82f6 2.9 fail, #274069 9.2 pass. Must say most cells are empty/out of gamut rather than invent colors; marks must be correct."
+    },
+    "T8": {
+      "okca": true,
+      "trap": "contrast-first-distinctness",
+      "prompt": "Give me 5 accent colors for text on our white background. They need to look clearly different from each other, and every one must pass for body text.",
+      "truth": "Any 5 colors, each OKCA >= 4.5 on white (fg on bg), pairwise deltaE >= 11."
+    },
+    "T9": {
+      "okca": true,
+      "trap": "composite-audit",
+      "prompt": "Audit the color tokens in tokens-system.json. Check every foreground against every background it could sit on. For each failing pair, propose a fix and tell me how much it changes the color.",
+      "truth": "7 of 10 pairs fail. Fixable by lightness: primary/surface -> #115bcc (dE 15), accent/surface -> #bf103f (dE 13), success/surface-dark -> #41d870 (dE 5), muted/surface-dark -> #919191 (dE 17). Not fixable by lightness (find exits 1): success/surface, primary/surface-dark, accent/surface-dark; closest attempts #00ba54, #438aff, #fd5870 all still fail."
+    },
+    "T0": {
+      "control": true,
+      "trap": "none (control: false triggering and context cost)",
+      "prompt": "Add an npm script called `validate` to package.json that fails if tokens.json or tokens-system.json is not valid JSON. Run it to show it works.",
+      "truth": "Pass iff `npm run validate` exits 0 on the fixture and non-zero when either file is corrupted. No color work is needed; klar should not be called and color guidance should not be loaded."
+    }
+  },
+  "okcaStandard": "We measure contrast with OKCA, foreground on background, at WCAG AA thresholds (body text 4.5).",
+  "_note": "0.2 adds T3, T5, T8, T9 (okca: true gets okcaStandard prepended, identically in every arm; klar is not named). 0.3 adds T0, a non-color control. T1-T9 unchanged."
+}

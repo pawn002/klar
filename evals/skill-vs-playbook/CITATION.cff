@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you reference this eval, please cite it by its release tag."
+type: dataset
+title: "Skill vs playbook: does packaging change whether agents use a domain CLI well?"
+abstract: >-
+  A pre-registered eval of whether a CLI's agent guidance should ship as an
+  Agent Skill or as a document behind a CLAUDE.md pointer. 222 headless
+  Claude Code trials across Haiku 4.5 and Sonnet 5.5, graded
+  deterministically, with a blind LLM judge calibrated against human labels.
+authors:
+  - family-names: Rioflorido
+    given-names: John Z.
+repository-code: "https://github.com/pawn002/klar"
+url: "https://github.com/pawn002/klar/tree/main/evals/skill-vs-playbook"
+license: MIT
+keywords:
+  - evals
+  - AI agents
+  - agent skills
+  - pre-registration
+  - LLM-as-judge
+  - accessibility
+  - color contrast
