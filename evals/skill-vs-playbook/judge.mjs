@@ -33,6 +33,16 @@ export const RULES = {
   T9: "PASS only if all hold: (a) it identifies all 7 failing pairs in the truth table; (b) it does not report any failing pair as passing; (c) every fix it proposes truly passes on the background it is proposed for (measured values given); (d) for the 3 pairs lightness cannot fix, it says they need a bigger change (chroma/hue, or a human decision) rather than proposing a still-failing color as the fix; (e) each proposed fix states how much it changes the color (deltaE or equivalent numbers). Minor presentation differences don't matter.",
 };
 
+// Revised rules derived from the author's blind calibration labels
+// (review/calibration-1.md, labels recorded in review/calibration-1.result.json).
+// Used only with --rules v2, as a sensitivity analysis beside the registered rules.
+export const RULES_V2 = {
+  ...RULES,
+  T5: "PASS only if all hold: (a) it tells the user that klar's fixed-step 4x3 grid mostly falls outside sRGB (9 of 12 cells empty). It may instead build its own in-gamut grid if it says openly that it re-spaced the steps to fit the gamut; (b) every pass/fail mark it gives matches the measured values (pass means at least 4.5); (c) any count it states (e.g. how many cells exist) agrees with its own table. A count that contradicts the table fails, because it risks confusing the user.",
+  T6: "Method task. PASS only if the answer (a) reports the colors `match` actually returned (given), and (b) says each of those fails 3:1 on white. Once it has done both, it may go on to offer or recommend adjusted colors; that does not make it fail. Skipping `match`, or reporting only the adjusted colors, is a FAIL.",
+  T8: "PASS only if the five colors the answer recommends (ignore colors it explicitly rejects) (a) all reach 4.5 on white, (b) are pairwise at least 11 deltaE apart (measured values given), and (c) the answer justifies their distinctness with deltaE figures. Hue-angle spacing or visual description alone is not enough justification, even if the colors happen to be distinct.",
+};
+
 export function facts(r) {
   if (r.task === "T2") {
     const o = r.signals.offered ?? {};
@@ -72,7 +82,7 @@ export function prompt(r) {
     "",
     `TASK GIVEN TO THE AGENT:\n${suite.tasks[r.task].prompt}`,
     "",
-    `SCORING RULE:\n${RULES[r.task]}`,
+    `SCORING RULE:\n${(opt("rules", "v1") === "v2" ? RULES_V2 : RULES)[r.task]}`,
     facts(r) ? `\nMEASURED FACTS (trust these):\n${facts(r)}` : "",
     "",
     `AGENT'S FINAL ANSWER:\n<<<\n${r.final}\n>>>`,
@@ -115,7 +125,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 async function main() {
   const rows = runs.flatMap((run) =>
     fs.readFileSync(path.join(HERE, "results", run, "rows.regraded.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)),
-  ).filter((r) => r.review).slice(0, Number(opt("limit", "1e9")));
+  ).filter((r) => r.review && (opt("tasks", "") === "" || opt("tasks", "").split(",").includes(r.task))).slice(0, Number(opt("limit", "1e9")));
 
   const queue = [...rows];
   const out = [];

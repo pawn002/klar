@@ -14,12 +14,16 @@ summary.
 ## Results
 
 **Bottom line:** ship the guidance as a thin skill that points to the
-playbook, not as a `CLAUDE.md` pointer. The pointer is never followed, and
-on hard tasks it does worse than no guidance at all.
+playbook, not as a `CLAUDE.md` pointer. The pointer is never followed.
+Whenever the playbook reached the agent, it used ΔE to judge color
+difference (24/24); whenever it didn't, it never did (0/21).
 
 222 trials across Haiku 4.5 and Sonnet 5.5; 0 infra errors; 0 contaminated
 trials. The 180 judge calls agreed with the rule-based grader on 158 at
 first pass; every override is recorded in `review/adjudications.json`.
+Blind human calibration (§6) found that the judge applied the written rules
+faithfully, but that three rules didn't match the author's intent. Results
+are reported under both the registered and the calibrated rules.
 
 ### 1. Discovery: the pointer is never followed
 
@@ -42,12 +46,16 @@ prompt said "use klar", and every miss failed its task.
 | Workflows (T3, T5, T8, T9), implicit | Sonnet | 7/12 | 11/12 | 0.15 |
 | Workflows, explicit ("use klar") | Sonnet | 7/12 | 12/12 | 0.037 |
 
+Under the calibrated rules (§6) the rows read 6/15 vs 12/15, 12/15 vs 15/15,
+7/12 vs 11/12 and 6/12 vs 12/12 (p = 0.014). The skill's lead holds or
+grows everywhere.
+
 On the single-step traps, Sonnet reaches the ceiling without the playbook.
 On multi-step workflows it doesn't. The pre-registered decision rule
 (the skill beats the pointer by ≥15 points) is met on Haiku and on Sonnet
 workflows, and not met on Sonnet single-step tasks (13 points).
 
-### 3. On hard tasks, a pointer is worse than no guidance
+### 3. A pointer can be worse than no guidance: the brand tradeoff
 
 With the prompt held fixed at "use klar", only the guidance varies:
 
@@ -72,13 +80,26 @@ The mechanism is visible on T3, the dark-mode brand tradeoff.
 the judgment.** klar's own help text did the playbook's job for agents that
 read it.
 
+**Scope of this claim.** Under the registered rules, the pointer loses to
+no guidance overall (7/12 vs 12/12, p = 0.037). Under the calibrated rules,
+the no-guidance arm also fails T8, because it never justified distinctness
+with ΔE. The overall gap then shrinks to 6/12 vs 9/12 (p = 0.40). What
+survives either way is T3, 0/3 vs 3/3. An earlier draft of this README
+stated "on hard tasks the pointer does worse than no guidance" without that
+qualification; calibration showed the claim needs it.
+
 ### 4. What the guidance adds on capable models is judgment
 
 On every model, agents without the playbook computed correct colors. What
 they lacked was *method* and *authority*:
 
-- None of them reached for ΔE to answer "did it change much?" (T7).
-- They made brand decisions that belonged to a human (T3).
+- **Method.** On the two "how different are these colors?" tasks (T7 "did
+  it change much?" and T8 "clearly different accents"), trials where the
+  playbook loaded used ΔE **24/24**. Trials where it didn't used it
+  **0/21**; they argued from lightness or hue angles instead (p ≈ 3e-13,
+  calibrated rules). This splits on whether the guidance *loaded*, not on
+  arm.
+- **Authority.** They made brand decisions that belonged to a human (T3).
 
 ### 5. Cost of always-loaded guidance (control task T0)
 
@@ -94,6 +115,34 @@ The overhead is real in tokens and negligible in dollars: per-trial cost is
 driven by turn count. What always-loaded guidance costs is context-window
 share.
 
+### 6. Human calibration of the judge
+
+The author labelled 16 judge verdicts blind: 8 where the judge alone decided
+the outcome, and 8 seeded-random agreed rows (`review/calibration-1.md`;
+key, labels and notes in `review/calibration-1.result.json`).
+
+| | Agreement with the human |
+|---|---|
+| Opus judge, all 16 | 11/16 |
+| Opus judge, judge-decided items | 5/8 |
+| Rule-based grader, all 16 | 9/16 |
+
+All five judge disagreements were differences in how to read the rule, not
+misread facts. The written rules for three tasks didn't capture the
+author's intent:
+
+- **T8:** distinctness must be *justified with ΔE*, not hue angles.
+- **T5:** an openly re-spaced, in-gamut grid is acceptable.
+- **T6:** recommending adjusted colors is fine once `match`'s output and
+  its failure have been reported.
+
+Those notes became revised rules (`RULES_V2` in `judge.mjs`). All 63 T5, T6
+and T8 rows were re-judged under them (`review/judge-opus-rules-v2.jsonl`).
+The registered results stand as registered; the calibrated results are
+reported beside them. The revised rules were derived from the 16 labelled
+items, so agreement on those items is not evidence for them. A second,
+fresh calibration sample would be.
+
 ### Pre-registered predictions
 
 | Prediction | Outcome |
@@ -104,7 +153,7 @@ share.
 | Thin skill ≈ full skill (round 2, round 4) | ✓ 12/15 vs 12/15; 11/12 vs 12/12 |
 | Skill beats pointer by ≥15 points on Sonnet workflows (round 3) | ✓ +33 points, p = 0.15 |
 | Skill beats pointer by ≥15 points on Sonnet single-step tasks | ✗ +13 points |
-| No guidance does no better than the pointer on workflows (round 4) | ✗ falsified: the pointer does *worse* |
+| No guidance does no better than the pointer on workflows (round 4) | ✗ registered rules: the pointer does *worse* (7/12 vs 12/12). Calibrated rules: 6/12 vs 9/12, not significant |
 
 
 ## Method
@@ -165,7 +214,7 @@ built by hand. Costs are Claude Code's list-price estimates.
 - **Every round's verdicts were audited against transcripts** before any
   numbers were read, and each grader fix triggered a regrade of all rounds.
 - **Human calibration** of the judge is in `review/calibration-1.md`
-  (`calibrate.mjs`).
+  (`calibrate.mjs`), with results in §6.
 
 **Task classes.** Most tasks score the *outcome*. T6 and T7 score *method*:
 whether the agent worked the way the playbook teaches (reading `match`'s
@@ -186,8 +235,10 @@ are reported with that distinction.
 - **The author owns the tool and the algorithm.** OKCA is graded only where
   the prompt states it as the project standard. Elsewhere, correct WCAG 2
   answers pass.
-- **The LLM judge is a proxy.** It was checked against the rule-based grader
-  every round and against human labels once. Its decisive calls are listed.
+- **The LLM judge is a proxy.** It agreed with the author 11/16 on a blind
+  sample, and all of the disagreements were about how to read a rule. The
+  calibrated rules were fitted on that same sample; they have not been
+  validated on a fresh one.
 - **Environment constants.** Claude Code's built-in skills load in every arm.
   They are disclosed, not removed.
 

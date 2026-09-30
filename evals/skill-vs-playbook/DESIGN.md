@@ -534,3 +534,28 @@ Fixed now, so the result can't pick its own threshold later:
   - **Eval totals:** 222 trials, $19.39 at list price; 180 judge calls,
     $10.35; 0 infra errors; 0 contaminated trials. Guidance loaded on color
     tasks: pointer 0/69, thin skill 69/69 (p ≈ 1e-40), full skill 37/42.
+- **2026-09-30, human calibration of the judge.**
+  - The author labelled 16 blind items: every judge-decided override (8)
+    plus one seeded agreed row per task (8). Judge vs human: 11/16 overall,
+    5/8 on judge-decided items. Rule-based grader vs human: 9/16. Labels,
+    notes and the published key are in `review/calibration-1.result.json`
+    and `review/calibration-1.key.json`.
+  - **Diagnosis:** all 5 disagreements are rule-interpretation differences,
+    not misread facts. T8 ×3: the human requires distinctness to be
+    justified with ΔE, not hue angles. T5 ×1: the human accepts an openly
+    re-spaced in-gamut grid. T6 ×1: the human accepts recommending adjusted
+    colors after `match`'s output and its failure are reported.
+  - **Response:** the notes were encoded as `RULES_V2` (T5′, T6′, T8′) and
+    all 63 T5/T6/T8 rows re-judged ($3.90). This is post-hoc: the
+    registered results stand, and calibrated results are reported beside
+    them. The revised rules are fitted to the same 16 items, so they need a
+    fresh sample to validate.
+  - **Effect on conclusions:**
+    - The skill-vs-pointer gap holds or grows everywhere (explicit
+      workflows: 12/12 vs 6/12, p = 0.014).
+    - "The pointer does worse than no guidance" no longer holds overall
+      (A0 9/12 vs A1 6/12, p = 0.40), because the no-guidance arm also
+      fails T8′. It holds on T3 only (3/3 vs 0/3). The README's earlier
+      wording is corrected in place, and the correction is noted there.
+    - New pooled finding: on T7 and T8, trials where the playbook loaded
+      used ΔE 24/24; trials where it didn't, 0/21 (p ≈ 3e-13).
