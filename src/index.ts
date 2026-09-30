@@ -7,6 +7,8 @@ import { matchCommand } from './commands/match';
 import { lightnessCommand } from './commands/lightness';
 import { findCommand } from './commands/find';
 import { pluginsCommand } from './commands/plugins';
+import { playbookCommand } from './commands/playbook';
+import { skillCommand } from './commands/skill';
 
 const pkg = require('../package.json');
 
@@ -59,6 +61,8 @@ export function run(): void {
   program.addCommand(lightnessCommand());
   program.addCommand(findCommand());
   program.addCommand(pluginsCommand());
+  program.addCommand(playbookCommand());
+  program.addCommand(skillCommand());
 
   // After every command is registered, so the walk reaches all of them.
   applyExitCodeContract(program);

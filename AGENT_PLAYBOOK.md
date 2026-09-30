@@ -602,11 +602,35 @@ color that just cleared 4.5 can drop below it.
 
 ---
 
-## Adding klar to your project's CLAUDE.md
+## Setting up an agent to use klar
 
-Paste one of the snippets below into your project's `CLAUDE.md` (or
-equivalent agent instructions file) so that Claude Code and other AI
-agents know how to use klar when working in your codebase.
+### Recommended: install the klar skill
+
+```bash
+klar skill install          # this project: .claude/skills/klar/SKILL.md
+klar skill install --user   # every project: ~/.claude/skills/klar/SKILL.md
+```
+
+The skill is a short `SKILL.md` whose description tells the agent when color
+work is in play, and whose body sends it to this playbook via `klar playbook`.
+That works whichever way klar is installed (local dependency, `npm install -g`,
+or `npx`).
+
+**Why a skill rather than a `CLAUDE.md` pointer.** klar's eval
+([evals/skill-vs-playbook](https://github.com/pawn002/klar/tree/main/evals/skill-vs-playbook))
+ran 222 agent trials. Across 69 color tasks, a `CLAUDE.md` pointer never once
+led the agent to open this playbook, while the skill loaded it in 69 of 69.
+When the playbook loaded, agents measured color differences with ΔE (24 of
+24); when it didn't, they never did (0 of 21).
+
+For an agent that supports Agent Skills but not Claude Code's folders,
+`klar skill show` prints the file to install wherever that agent expects it.
+
+### Fallback: `CLAUDE.md` snippets
+
+For agents without skill support, paste one of the snippets below into your
+project's `CLAUDE.md` (or equivalent agent instructions file). Expect the
+agent to use the snippet itself rather than follow it to this playbook.
 
 ### Minimal snippet
 
@@ -627,10 +651,10 @@ When working with colors, use `klar` commands:
 - `klar variants <color>` — generate palette options
 Always use `--json` for programmatic consumption and `-q` for single values.
 
-For complete workflow guidance, see: AGENT_PLAYBOOK.md in the klar repo.
+For complete workflow guidance, run `klar playbook`.
 ```
 
-### Full snippet (recommended)
+### Full snippet
 
 Use this when agents will routinely do art direction tasks in your
 project — palette work, dark mode, auditing design tokens:
@@ -708,6 +732,5 @@ Flag any pair below the threshold for its content type.
 `klar match "<reference>" "<target>" --json`
 Then re-verify contrast for the matched color.
 
-For the full playbook with 5 end-to-end workflows, see:
-AGENT_PLAYBOOK.md in the klar repository.
+For the full playbook with 5 end-to-end workflows, run `klar playbook`.
 ```

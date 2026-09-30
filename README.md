@@ -45,6 +45,9 @@ klar contrast "#fff" "#000"
 
 # Or run without installing
 npx klar-cli contrast "#fff" "#000"
+
+# Teach your AI agent to use klar (installs an Agent Skill)
+klar skill install
 ```
 
 ## Contrast algorithms
@@ -657,6 +660,56 @@ klar plugins list -q
 
 ---
 
+### `skill` — Install the klar Agent Skill
+
+```
+klar skill install [options]
+klar skill show
+```
+
+Writes klar's Agent Skill to `.claude/skills/klar/SKILL.md` in the current
+project, so an agent loads the playbook whenever it does color work. In klar's
+eval ([evals/skill-vs-playbook](./evals/skill-vs-playbook/)), a `CLAUDE.md`
+pointer led agents to the playbook in 0 of 69 trials; the skill loaded it in
+69 of 69.
+
+`show` prints the shipped `SKILL.md`, for agents that keep skills elsewhere.
+
+**Options (`install`):**
+| Flag | Description |
+|------|-------------|
+| `--user` | Install to `~/.claude/skills/klar/` (every project) instead of this project |
+| `--force` | Replace an existing `SKILL.md` that differs from the shipped one |
+| `--json` | JSON output: `{ "path": string, "action": "installed" \| "updated" \| "unchanged" \| "skipped" }` |
+| `-q, --quiet` | Print only the file path |
+
+**Exit codes:** `0` when the file is installed, updated, or already current;
+`1` when an existing, customized `SKILL.md` was left alone (re-run with
+`--force` to replace it).
+
+**Examples:**
+
+```bash
+klar skill install
+klar skill install --user
+klar skill show > path/to/your/agent/skills/klar/SKILL.md
+```
+
+---
+
+### `playbook` — Print the agent playbook
+
+```
+klar playbook [--path]
+```
+
+Prints [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) from the installed package. The
+shipped skill points agents here rather than at a file path, because the file's
+location differs between a local dependency, `npm install -g` and `npx`.
+`--path` prints the location instead.
+
+---
+
 ## Color Input Formats
 
 All commands accept colors in these formats:
@@ -680,9 +733,10 @@ klar meta "oklch(62% 0.19 260)"         # OKLCH — must quote parens
 
 ## Advanced Workflows
 
-> **For AI agents:** See [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) for
-> end-to-end art direction workflows — palette building, dark mode
-> translation, accessibility auditing, and more.
+> **For AI agents:** run `klar skill install` so your agent loads
+> [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) when it does color work. The playbook
+> covers end-to-end art direction workflows: palette building, dark mode
+> translation, accessibility auditing, and more. `klar playbook` prints it.
 >
 > **Evals:** [evals/skill-vs-playbook](./evals/skill-vs-playbook/) measures
 > whether agents actually read this guidance, and whether packaging it as a

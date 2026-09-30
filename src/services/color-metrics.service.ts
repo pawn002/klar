@@ -2,6 +2,7 @@ import Color from 'colorjs.io';
 import { ContrastType } from './types';
 import { ColorUtilService } from './color-util.service';
 import { OkcaService } from './okca.service';
+import { displayContrast } from '../utils/contrast-display';
 import { PluginRegistry } from '@pawn002/klar-plugin-registry';
 import { GamutMode, DEFAULT_GAMUT_MODE, applyGamut, toGamutHex, toGamutOklch } from './gamut';
 
@@ -42,7 +43,7 @@ export class ColorMetricsService {
       const c2 = applyGamut(parsedTwo, gamut);
       return contrastType === 'deltaE'
         ? Math.round(c1.deltaE2000(c2))
-        : parseFloat(c1.contrast(c2, 'WCAG21').toFixed(1));
+        : displayContrast('wcag2', c1.contrast(c2, 'WCAG21'));
     }
 
     // OKCA accepts `oklch()`, so it is scored at full precision rather than

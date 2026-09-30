@@ -1,5 +1,6 @@
 import Color from 'colorjs.io';
 import { OkcaService } from './okca.service';
+import { displayContrast } from '../utils/contrast-display';
 import { PluginRegistry } from '@pawn002/klar-plugin-registry';
 import {
   GamutMode,
@@ -197,9 +198,9 @@ export class ColorUtilService {
     const c2 = this.parseColor(colorTwo);
     if (!c1 || !c2) return null;
 
-    return parseFloat(
-      applyGamut(c1, gamut).contrast(applyGamut(c2, gamut), 'WCAG21').toFixed(1),
-    );
+    // Full precision: callers compare this against unrounded WCAG thresholds.
+    // Rounding for display happens at the output boundary (displayContrast).
+    return applyGamut(c1, gamut).contrast(applyGamut(c2, gamut), 'WCAG21');
   }
 
   getColorMeta(color: string): ColorMetaObj | null {
@@ -795,7 +796,7 @@ export class ColorUtilService {
         Math.abs(pass.best.l - normalizedLightness) > 1e-6 ? ['lightness'] : [];
       return {
         adjustedColor: pass.best.hex,
-        actualContrast: pass.best.contrast,
+        actualContrast: displayContrast(contrastType, pass.best.contrast),
         iterations: pass.iterations,
         success: true,
         reason: 'ok',
@@ -829,7 +830,7 @@ export class ColorUtilService {
       if (Math.abs(viaChroma.lightness - normalizedLightness) > 1e-6) axes.push('lightness');
       return {
         adjustedColor: viaChroma.hex,
-        actualContrast: viaChroma.contrast,
+        actualContrast: displayContrast(contrastType, viaChroma.contrast),
         iterations: pass.iterations,
         success: true,
         reason: 'ok',
@@ -862,13 +863,13 @@ export class ColorUtilService {
     const message =
       reason === 'unreachable'
         ? `Target contrast ${targetContrast} exceeds the maximum reachable against ` +
-          `${baseColor} (${ceiling.toFixed(1)}, at black or white). No color meets it; ` +
+          `${baseColor} (${displayContrast(contrastType, ceiling).toFixed(1)}, at black or white). No color meets it; ` +
           `the base color has to change.`
         : reason === 'chroma-exhausted'
           ? `Target contrast ${targetContrast} not reached even at chroma 0 ` +
-            `(closest: ${Math.abs(fallback.contrast)}).`
+            `(closest: ${displayContrast(contrastType, Math.abs(fallback.contrast))}).`
           : `Target contrast ${targetContrast} not reachable by lightness alone ` +
-            `(closest: ${Math.abs(fallback.contrast)}).` +
+            `(closest: ${displayContrast(contrastType, Math.abs(fallback.contrast))}).` +
             (viaChroma
               ? ` Reducing chroma to ${viaChroma.chroma.toFixed(3)} at lightness ` +
                 `${viaChroma.lightness.toFixed(3)} would reach it — pass ` +
@@ -877,7 +878,7 @@ export class ColorUtilService {
 
     return {
       adjustedColor: fallback.hex,
-      actualContrast: fallback.contrast,
+      actualContrast: displayContrast(contrastType, fallback.contrast),
       iterations: pass.iterations,
       success: false,
       reason,
