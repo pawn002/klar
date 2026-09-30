@@ -48,7 +48,9 @@ const klarCmds = (t) => bashCmds(t).filter((u) => /(^|[\s;&|(`$])klar\s/.test(u.
 
 export function commonSignals(t, arm) {
   const inputs = t.toolUses.map((u) => JSON.stringify(u.input));
-  const playbookRead = inputs.some((s) => s.includes("AGENT_PLAYBOOK"));
+  // Reading the file, or running `klar playbook` (3.1.0+), which prints it.
+  const playbookRead = inputs.some((s) => s.includes("AGENT_PLAYBOOK")) ||
+    bashCmds(t).some((u) => /\bklar\s+playbook\b/.test(u.cmd));
   const skillFired = t.toolUses.some((u) => u.name === "Skill" && JSON.stringify(u.input).includes("klar"));
   const guidanceLoaded = {
     A0: null,
@@ -56,6 +58,7 @@ export function commonSignals(t, arm) {
     A2: playbookRead,
     A3: skillFired,
     A4: skillFired && playbookRead,
+    A5: skillFired && playbookRead,
   }[arm];
   const initSkills = t.init.skills ?? [];
   return {
@@ -67,7 +70,7 @@ export function commonSignals(t, arm) {
     // Anything outside the trial project that could carry klar guidance.
     contaminated:
       inputs.some((s) => /\/home\/user\/klar|skill-vs-playbook\/\.cache/.test(s)) ||
-      (!["A3", "A4"].includes(arm) && initSkills.includes("klar")),
+      (!["A3", "A4", "A5"].includes(arm) && initSkills.includes("klar")),
     model: t.init.model ?? null,
     claudeCodeVersion: t.init.claude_code_version ?? null,
     costUsdListPrice: t.result.total_cost_usd ?? null,

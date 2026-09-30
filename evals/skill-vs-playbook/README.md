@@ -143,6 +143,21 @@ reported beside them. The revised rules were derived from the 16 labelled
 items, so agreement on those items is not evidence for them. A second,
 fresh calibration sample would be.
 
+### 7. The shipped skill performs like the tested one
+
+klar 3.1.0 ships the thin skill with three changes from the tested A4:
+- its body says "run `klar playbook`" instead of a `node_modules` path, which
+  doesn't exist for `npm install -g` or `npx`;
+- its description is YAML-quoted (the tested frontmatter was invalid under a
+  strict YAML parser; Claude Code tolerated it);
+- the playbook's setup section is rewritten.
+
+A pre-registered check (round 5, arm A5) installed the release candidate
+and created the skill with `klar skill install`, as a user would. It loaded
+guidance in **24/24** trials, every time via `klar playbook`. On Sonnet
+workflows it scored 11/12 implicit and 11/12 explicit, against 11/12 and
+12/12 for the tested A4 (p = 1.0).
+
 ### Pre-registered predictions
 
 | Prediction | Outcome |
@@ -153,6 +168,7 @@ fresh calibration sample would be.
 | Thin skill ≈ full skill (round 2, round 4) | ✓ 12/15 vs 12/15; 11/12 vs 12/12 |
 | Skill beats pointer by ≥15 points on Sonnet workflows (round 3) | ✓ +33 points, p = 0.15 |
 | Skill beats pointer by ≥15 points on Sonnet single-step tasks | ✗ +13 points |
+| Shipped skill loads ≥22/24 and is within one trial of A4 (round 5) | ✓ 24/24; 11/12 vs 11/12, 11/12 vs 12/12 |
 | No guidance does no better than the pointer on workflows (round 4) | ✗ registered rules: the pointer does *worse* (7/12 vs 12/12). Calibrated rules: 6/12 vs 9/12, not significant |
 
 

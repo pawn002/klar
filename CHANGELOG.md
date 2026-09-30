@@ -8,6 +8,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `@pawn002/klar-plugin-interface` and `@pawn002/klar-plugin-registry` are versioned
 independently from `klar-cli`; entries below note when they move.
 
+## [3.1.0] - unreleased
+
+klar's first eval ([evals/skill-vs-playbook]) measured how agents find klar's
+guidance. A `CLAUDE.md` pointer led them to the playbook in 0 of 69 trials; an
+Agent Skill loaded it in 69 of 69. This release ships that skill. The same eval
+found the wcag2 false pass fixed below.
+
+### Added
+
+- **`klar skill install`** writes klar's Agent Skill to
+  `.claude/skills/klar/SKILL.md` (or `~/.claude/skills/klar/` with `--user`).
+  It won't overwrite a customized `SKILL.md` without `--force` (exits `1` when
+  it leaves one alone). `klar skill show` prints the file for agents that keep
+  skills elsewhere.
+- **`klar playbook`** prints `AGENT_PLAYBOOK.md` from the installed package
+  (`--path` prints its location). The skill points here because the file's
+  path differs between a local dependency, `npm install -g` and `npx`.
+- The skill ships in the package at `skills/klar/SKILL.md`. Its description is
+  the one the eval tested; a test keeps the two in step. Its body names
+  `klar playbook` rather than the `node_modules` path the eval used, so it
+  works for global and `npx` installs too.
+
+### Fixed
+
+- **`wcag2` no longer passes colors that fall short of the target** ([#17]).
+  Ratios were rounded to one decimal before being compared, so a true 4.458
+  displayed and passed as 4.5 in `contrast`, and `find` reported `success: true`
+  for it. WCAG 2.x thresholds are unrounded: `find` now compares at full
+  precision, and wcag2 values are displayed rounded **down** to one decimal, so
+  a shown value at or above a threshold always is.
+
+  **Behavior change for wcag2 users:** some displayed ratios drop by 0.1 (for
+  example 5.564 shows as 5.5, not 5.6), and `find -t wcag2` can return a
+  slightly different color. The old one may not have met the target. OKCA and
+  deltaE output is unchanged.
+
+### Changed
+
+- `AGENT_PLAYBOOK.md`'s setup section now recommends the skill, citing the eval,
+  and keeps the `CLAUDE.md` snippets as a fallback for agents without skill
+  support. The snippets point to `klar playbook`.
+
 ## [3.0.0] - 2026-08-02
 
 Issue [#9] reported that `contrast` overstated out-of-gamut colors. It turned out
@@ -258,6 +300,7 @@ Initial release.
   `klar plugins list` now surfaces each plugin's source, version, and resolved path,
   and flags plugins loaded from outside the project.
 
+[3.1.0]: https://github.com/pawn002/klar/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/pawn002/klar/compare/v2.0.0...v3.0.0
 [2.0.0]: https://github.com/pawn002/klar/compare/v1.0.1...v2.0.0
 [1.0.1]: https://github.com/pawn002/klar/compare/v1.0.0...v1.0.1
@@ -265,3 +308,5 @@ Initial release.
 [#2]: https://github.com/pawn002/klar/pull/2
 [#9]: https://github.com/pawn002/klar/issues/9
 [#10]: https://github.com/pawn002/klar/issues/10
+[#17]: https://github.com/pawn002/klar/issues/17
+[evals/skill-vs-playbook]: https://github.com/pawn002/klar/tree/main/evals/skill-vs-playbook

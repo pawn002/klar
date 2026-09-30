@@ -99,5 +99,40 @@
     "pass": true,
     "by": "Opus judge (review/judge-opus-round4b.jsonl), per procedure",
     "reason": "The five recommended colors all reach at least 4.5 on white: #c20329 4.7, #137826 5.0, #2b5fd9 4.5, #8539c1 4.7 and #00727f 4.9. The closest pair is blue and purple at deltaE 22, well above the 11 threshold. Every other pair is 25 or higher. The answer rejects orange and yellow. It offers #9a4a00 and #0f3fb7 only as optional swaps, so neither changes the recommended set."
+  },
+  "r5-sonnet-b1-exp/A5-T3-explicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round5.jsonl), per procedure",
+    "reason": "(a) The answer recommends #7bacfc, which measures 4.5 on #1a1a2e. (b) It gives the distance from the brand color as ΔE 13, along with the lightness shift (0.648→0.743) and the chroma shift (0.188→0.128). (c) It leaves the brand call to the user. It says \"If ΔE 13 is too far from the brand for the primary\", offers another option and waits for approval before applying anything, so the desaturation is not presented as settled. (d) It mentions #438aff only as a failing attempt (2.2), not as a fix."
+  },
+  "r5-sonnet-b1-exp/A5-T8-explicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round5.jsonl), per procedure",
+    "reason": "The five recommended colors are #bb0818 (5), #2e7d32 (4.5), #016fb2 (4.5), #863db9 (4.7) and #047984 (4.5), so all reach 4.5 on white. Every pairwise deltaE among them is at least 11: the lowest is #016fb2~#047984 at 17, and the others range from 28 to 63. The colors it rejected (#0277bd, #00838f, #d32f2f, #6a1b9a, #b43e02) are not counted."
+  },
+  "r5-sonnet-b1-imp/A5-T8-implicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round5.jsonl), per procedure",
+    "reason": "The answer recommends five colors: #c20329, #a84c03, #017835, #2052dc and #7f24d0. Their measured OKCA values on white are 4.7, 4.5, 5, 5 and 5, so all reach 4.5. The smallest of the 10 pairwise deltaE values is 18 (red/orange), then 19 (blue/purple); the rest are 39 or higher, so every pair clears 11. The colors it named but did not recommend (#b45309, #a16207, #0f766e) are excluded from the check."
+  },
+  "r5-sonnet-b2-exp/A5-T8-explicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round5.jsonl), per procedure",
+    "reason": "The answer recommends five colors: #115bcc (5.0), #bf103f (4.7), #8225cb (5.0), #3b7849 (4.6) and #774b08 (6.3). Each one reaches 4.5 on white. The lowest pairwise deltaE among them is 24 (#115bcc~#8225cb), and every other pair is 31 or higher, so all pairs clear the minimum of 11. The other colors it names are the bright source colors it rejected, so they are not counted."
+  },
+  "r5-sonnet-b2-imp/A5-T3-implicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round5.jsonl), per procedure",
+    "reason": "(a) It recommends #7bacfc, which measures 4.5 on #1a1a2e. (b) It gives deltaE 13 plus the OKLCH lightness and chroma shifts. (c) It says the color is visibly different from the brand blue and leaves the choice to the user, offering alternatives if their art director finds it too far off. It does not present the desaturated color as final. (d) It names #438aff (2.2) only as a failing attempt, not as a fix."
+  },
+  "r5-sonnet-b2-imp/A5-T8-implicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round5.jsonl), per procedure",
+    "reason": "The answer recommends five colors: #c7013a, #8e6001, #027f36, #1754db and #752fe4. Their measured OKCA values on white are 4.5, 4.5, 4.6, 5.0 and 4.7, so all reach 4.5. The lowest of the ten pairwise deltaE values is 17 (#1754db~#752fe4), which is above 11. Teal is offered only as an optional swap, not as one of the five, so it doesn't affect the result."
+  },
+  "r5-sonnet-b3-exp/A5-T8-explicit-sonnet-0": {
+    "pass": true,
+    "by": "Opus judge (review/judge-opus-round5.jsonl), per procedure",
+    "reason": "The answer recommends five colors: #bb0818, #2e7d32, #1565c0, #8931b1 and #8a5200. Their contrast values on white are 5, 4.5, 4.7, 5 and 5.2, so all five reach 4.5. The smallest pairwise deltaE among them is 23 (#bb0818 vs #8a5200), which is at least 11. The rejected colors (#00796b, #e65100 and #b85c00) are excluded as the rule requires."
   }
 }

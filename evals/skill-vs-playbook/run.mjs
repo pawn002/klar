@@ -18,7 +18,7 @@ import { writeArm } from "./arms.mjs";
 import { grade } from "./grade.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TARBALL = path.join(HERE, ".cache/klar-cli-3.0.0.tgz");
+const DEFAULT_TARBALL = path.join(HERE, ".cache/klar-cli-3.0.0.tgz");
 
 const args = Object.fromEntries(
   process.argv.slice(2).reduce((acc, a, i, all) => (a.startsWith("--") ? [...acc, [a.slice(2), all[i + 1]]] : acc), []),
@@ -39,8 +39,10 @@ const resultsDir = path.join(HERE, "results", runName);
 fs.mkdirSync(path.join(resultsDir, "transcripts"), { recursive: true });
 
 // ---------- one-time template: klar installed from the pinned tarball ----------
-
-const template = path.join(WORK, "template");
+// --tarball selects another klar build (e.g. a release candidate for the
+// shipped-artifact check). Each tarball gets its own template directory.
+const TARBALL = path.resolve(args.tarball ?? DEFAULT_TARBALL);
+const template = TARBALL === DEFAULT_TARBALL ? path.join(WORK, "template") : path.join(WORK, `template-${path.basename(TARBALL, ".tgz")}`);
 if (!fs.existsSync(path.join(template, "node_modules/.bin/klar"))) {
   fs.mkdirSync(template, { recursive: true });
   execFileSync("npm", ["install", "--no-audit", "--no-fund", "--silent", TARBALL], { cwd: template, stdio: "inherit" });
@@ -80,6 +82,9 @@ function setupTrial(id, arm) {
   fs.cpSync(path.join(template, "node_modules"), path.join(projDir, "node_modules"), { recursive: true, verbatimSymlinks: true });
   fs.writeFileSync(path.join(projDir, ".gitignore"), "node_modules/\n");
   writeArm(arm, playbook, projDir);
+  // A5, the shipped skill: created exactly as a user would, by the installed
+  // klar's own `klar skill install`.
+  if (arm === "A5") execFileSync(path.join(projDir, "node_modules/.bin/klar"), ["skill", "install"], { cwd: projDir, stdio: "ignore" });
   sh("git", ["init", "-q"], projDir);
   sh("git", ["add", "-A"], projDir);
   sh("git", ["-c", "user.name=eval", "-c", "user.email=eval@example.invalid", "commit", "-qm", "init"], projDir);
