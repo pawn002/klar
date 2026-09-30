@@ -683,6 +683,10 @@ klar meta "oklch(62% 0.19 260)"         # OKLCH — must quote parens
 > **For AI agents:** See [AGENT_PLAYBOOK.md](./AGENT_PLAYBOOK.md) for
 > end-to-end art direction workflows — palette building, dark mode
 > translation, accessibility auditing, and more.
+>
+> **Evals:** [evals/skill-vs-playbook](./evals/skill-vs-playbook/) measures
+> whether agents actually read this guidance, and whether packaging it as a
+> skill instead of a `CLAUDE.md` pointer changes the outcome.
 
 ### Scripting with `--json` and `jq`
 

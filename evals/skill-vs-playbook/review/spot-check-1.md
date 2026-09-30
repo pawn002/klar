@@ -1,3 +1,5 @@
+> **Superseded (2026-09-29).** This 12-item sheet was replaced by the Opus judge and then by the blind judge calibration in `calibration-1.md`. It was never labelled; it is kept as part of the record.
+
 # Spot-check 1 — blind grader calibration
 
 For each item, read the task, the scoring rule and the agent's final answer, and label it **P** (meets the rule) or **F** (doesn't). The grader's verdict and the arm are hidden. Reply with a line like `S1 P, S2 F, …`. Add a note on any item where the rule itself seems wrong.
