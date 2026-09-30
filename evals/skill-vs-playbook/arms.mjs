@@ -44,6 +44,8 @@ export function armFiles(arm, playbook) {
             "(argument order, exit codes, gamut) that decide whether an answer is correct.\n",
         ),
       };
+    case "A5": // shipped skill: written by `klar skill install` in run.mjs, not here
+      return {};
     default:
       throw new Error(`unknown arm ${arm}`);
   }

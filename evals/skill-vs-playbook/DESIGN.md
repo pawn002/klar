@@ -559,3 +559,31 @@ Fixed now, so the result can't pick its own threshold later:
       wording is corrected in place, and the correction is noted there.
     - New pooled finding: on T7 and T8, trials where the playbook loaded
       used ΔE 24/24; trials where it didn't, 0/21 (p ≈ 3e-13).
+- **2026-09-30, round 5 plan: shipped-artifact check (fixed before any
+  round-5 trial).**
+  - **Why:** klar 3.1.0 ships the thin skill, but not byte-for-byte as tested
+    in A4. (1) The body says "run `klar playbook`" instead of naming
+    `node_modules/klar-cli/AGENT_PLAYBOOK.md`, because that path doesn't
+    exist for `npm install -g` or `npx`, which klar's README leads with.
+    (2) The description is YAML-quoted: the evaluated frontmatter was invalid
+    under a strict YAML parser (`CLI: checking` contains `: `). Claude Code's
+    parser tolerated it, which is a generalization caveat for other agents.
+    (3) The 3.1.0 playbook's setup section is rewritten. Its workflow
+    guidance is unchanged.
+  - **Arm A5 (shipped):** klar installed from the 3.1.0 release-candidate
+    tarball (`.cache/klar-cli-3.1.0-rc.tgz`, sha256 prefix 5b7ddd50, packed
+    after `prepare-publish` from commit d048b21), with the skill created by
+    the installed klar's own `klar skill install`. The grader now also counts
+    running `klar playbook` as reading the playbook; regrading every earlier
+    run changed no verdict and no load status.
+  - **Cells:** A5 on T3, T5, T8 and T9, implicit and explicit, Sonnet 5.5,
+    n=3: 24 trials. Comparison: A4 on the same tasks (implicit 11/12,
+    explicit 12/12, registered rules).
+  - **Predictions:**
+    - (1) A5 loads guidance (skill fired and playbook printed or read) in
+      ≥ 22/24.
+    - (2) A5 is within one trial of A4 in each phrasing, under the
+      registered rules. The calibrated rules are reported too.
+  - **If (1) fails:** agents aren't following "run `klar playbook`" the way
+    they followed a file path. The skill body gets revised and re-tested
+    before 3.1.0 is released.
