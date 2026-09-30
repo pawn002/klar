@@ -587,3 +587,23 @@ Fixed now, so the result can't pick its own threshold later:
   - **If (1) fails:** agents aren't following "run `klar playbook`" the way
     they followed a file path. The skill body gets revised and re-tested
     before 3.1.0 is released.
+- **2026-09-30, round 5 result (shipped-artifact check; 24 trials, $3.42 at
+  list price, plus $2.52 for the judge).**
+  - **Prediction 1 ✓:** A5 loaded guidance in 24/24. In every trial the
+    agent invoked the skill and then ran `klar playbook`, the pointer as
+    shipped.
+  - **Prediction 2 ✓:** A5 is within one trial of A4 in each phrasing.
+    Registered rules: implicit 11/12 vs 11/12, explicit 11/12 vs 12/12
+    (p = 1.0 both). Calibrated rules: implicit 12/12 vs 11/12, explicit
+    11/12 vs 12/12.
+  - **Judge:** 17/24 first-pass agreement. All 7 disagreements were the
+    established patterns (5 × T8 rejected candidates, 2 × T3 deferral
+    phrasing), judge accepted, recorded in `review/adjudications.json`.
+  - **The one failure** (A5-T3 explicit, batch 3) is a borderline
+    escalation miss: "I applied the desaturation because you asked for the
+    closest color that passes," and then an alternative. Tested A4 agents
+    showed the same borderline pattern, so the shipped variant didn't
+    introduce it.
+  - **Conclusion:** the shipped skill (`klar skill install`, body pointing to
+    `klar playbook`, quoted description, 3.1.0 playbook) performs like the
+    tested thin skill. 3.1.0 can ship it.
