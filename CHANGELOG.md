@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `@pawn002/klar-plugin-interface` and `@pawn002/klar-plugin-registry` are versioned
 independently from `klar-cli`; entries below note when they move.
 
-## [3.1.0] - unreleased
+## [3.1.0] - 2026-09-30
 
 klar's first eval ([evals/skill-vs-playbook]) measured how agents find klar's
 guidance. A `CLAUDE.md` pointer led them to the playbook in 0 of 69 trials; an
