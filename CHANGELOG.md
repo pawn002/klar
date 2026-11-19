@@ -8,6 +8,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `@pawn002/klar-plugin-interface` and `@pawn002/klar-plugin-registry` are versioned
 independently from `klar-cli`; entries below note when they move.
 
+## [4.0.0] - 2026-11-18
+
+### Breaking
+
+- **Contrast scores changed** — `@pawn002/okca` upgraded from `^2.0.2` to `^3.0.0`.
+  okca 3.0 scores both polarities on one scale: black on white now scores 20.9,
+  the same as white on black (it was 20). A pair scores the same in either
+  argument order unless the darker color is darker than `#767676`; then
+  light-on-dark scores lower. Colors on dark backgrounds mostly score lower
+  (`#cccccc` on `#333333` 7.1 → 5.7, white on `#000080` 14.4 → 10.2), and some
+  saturated colors score higher (`#ff8c00` on `#1a1a1a` 4.2 → 4.8). **A pair that
+  cleared a threshold under 3.1.0 may not now, and vice versa.** Re-validate
+  design tokens checked against earlier klar output. FP = 0 still holds: no
+  OKCA score exceeds WCAG's. See okca's
+  [CHANGELOG](https://github.com/pawn002/okca/blob/main/CHANGELOG.md#300---2026-11-18).
+
+### Changed
+
+- `AGENT_PLAYBOOK.md` and `README.md` examples re-run under okca 3.0. The
+  argument-order example now uses `#3a7d44` (4.5 on white, 4.3 with white on
+  it), since white/`#0055ff` no longer flips AA.
+
 ## [3.1.0] - 2026-09-30
 
 klar's first eval ([evals/skill-vs-playbook]) measured how agents find klar's
@@ -300,6 +322,7 @@ Initial release.
   `klar plugins list` now surfaces each plugin's source, version, and resolved path,
   and flags plugins loaded from outside the project.
 
+[4.0.0]: https://github.com/pawn002/klar/compare/v3.1.0...v4.0.0
 [3.1.0]: https://github.com/pawn002/klar/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/pawn002/klar/compare/v2.0.0...v3.0.0
 [2.0.0]: https://github.com/pawn002/klar/compare/v1.0.1...v2.0.0
