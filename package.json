@@ -1,6 +1,6 @@
 {
   "name": "klar-cli",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "description": "klar — color accessibility tools (OKCA contrast algorithm) for AI coding agents and the terminal",
   "author": "John Z. Rioflorido",
   "license": "MIT",
