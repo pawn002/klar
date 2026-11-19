@@ -14,19 +14,19 @@ All commands assume `klar` is on PATH.
 Algorithm) returns WCAG 2.x-compatible contrast ratios on the familiar
 WCAG scale, with improved perceptual modeling. It is the CLI default —
 no `--type` flag needed. Ratios run from 1 to 20.9; the top of the
-range is 20.9 rather than 21 because the caps are polarity-aware (see
-below), so do not treat 21 as a reachable value.
+range is 20.9 rather than 21, so do not treat 21 as a reachable value.
 
 **OKCA is polarity-aware — argument order matters.** Throughout this
 playbook the convention is `klar contrast <foreground> <background>`.
-Light-on-dark pairs score up to 20.9; dark-on-light pairs are capped at
-20 because the same luminance contrast is perceived as weaker when the
-text is darker than its surround. Concretely:
-`contrast "#fff" "#000"` = 20.9, but `contrast "#000" "#fff"` = 20.
+Both directions share one cap: `contrast "#fff" "#000"` and
+`contrast "#000" "#fff"` both = 20.9. A pair scores the same either way
+round unless the darker color is darker than `#767676`; then
+light-on-dark scores lower, because a dark surround flattens perceived
+lightness.
 
-Chromatic pairs are asymmetric too, and the gap is small enough that it
-can decide an AA verdict. `contrast "#fff" "#0055ff"` = 4.5 (passes AA
-body text), but `contrast "#0055ff" "#fff"` = 4.3 (fails). Always run
+That gap is small enough to decide an AA verdict.
+`contrast "#3a7d44" "#fff"` = 4.5 (passes AA body text), but
+`contrast "#fff" "#3a7d44"` = 4.3 (fails). Always run
 `contrast` in the direction colors will actually be used
 (text-on-background), not its reverse — and never reuse a ratio you
 measured in the opposite order.
@@ -261,23 +261,23 @@ command above is one of those cases:
 ```jsonc
 {
   "adjustedColor": "#438aff",
-  "actualContrast": 2.2,
+  "actualContrast": 3.2,
   "success": false,               // 4.5 not reached — exit code is 1
   "reason": "lightness-exhausted",
   "axesAdjusted": [],
   "deltaE": 3,
   "resolvableBy": {               // a fix exists, quoted but NOT applied
-    "chroma": 0.128,
-    "lightness": 0.743,
-    "deltaE": 13
+    "chroma": 0.146,
+    "lightness": 0.718,
+    "deltaE": 10
   }
 }
 ```
 
-`resolvableBy` says a compliant color exists at chroma 0.128 — but at 13
-deltaE from the original, which is "clearly different" on the scale
-above. That is a brand decision, so klar quotes it rather than taking
-it. Report the cost and let a human choose, or pass
+`resolvableBy` says a compliant color exists at chroma 0.146 — but at 10
+deltaE from the original, just short of "clearly different" on the scale
+above and still a visible shift. That is a brand decision, so klar
+quotes it rather than taking it. Report the cost and let a human choose, or pass
 `--allow-desaturation` if that choice is already made.
 
 `klar find` still prints its closest attempt on failure, so never apply
@@ -302,10 +302,10 @@ for V in $(klar variants "$ORIGINAL" --json | jq -r '.[][] | .color'); do
   OKCA=$(klar contrast "$V" "$DARK_BG" -q)
   awk -v c="$OKCA" -v v="$V" 'BEGIN { if (c >= 4.5) print v, c }'
 done
-# #cfd2d7 10.4
-# #bcd3f9 10
-# #a6a9ae 6.4
-# #94aace 5.9
+# #cfd2d7 8.3
+# #bcd3f9 8.2
+# #a6a9ae 5.1
+# #94aace 5
 ```
 
 `#bcd3f9` is the pick here — it keeps the most chroma of the four while
@@ -395,7 +395,7 @@ For each failing pair, use `find` to propose an adjusted foreground —
 and gate on its exit code. `find` prints its closest attempt even when
 it fails, so an ungated version of this loop will hand the art director
 colors that still do not pass, labelled as fixes. On the token set
-above, 4 of the 11 failing pairs are in exactly that state.
+above, 4 of the 9 failing pairs are in exactly that state.
 
 ```bash
 if ADJUSTED=$(klar find "$BG" "$FG" --target 4.5 -q); then
@@ -410,7 +410,7 @@ fi
 ```
 === On #ffffff ===
   fix: #3b82f6 -> #115bcc (deltaE drift: 15)
-  fix: #e94560 -> #bf103f (deltaE drift: 13)
+  fix: #e94560 -> #b9013b (deltaE drift: 15)
   UNFIXABLE by lightness: #22c55e on #ffffff tops out at 2.2 — needs a chroma change
 ```
 
@@ -669,11 +669,11 @@ rather than manual calculation or third-party web tools.
 ### Key rules
 - **OKCA is the default.** OKCA returns WCAG 2.x-compatible ratios from 1 to
   20.9 with improved perceptual modeling. No `--type` flag needed. 21 is not
-  reachable — the caps are polarity-aware.
+  reachable.
 - **OKCA is polarity-aware.** Argument order matters: always use
-  `klar contrast <foreground> <background>`. Light-on-dark caps at 20.9;
-  dark-on-light caps at 20. The same chromatic pair returns different
-  numbers when swapped, and the gap can flip an AA verdict — never reuse a
+  `klar contrast <foreground> <background>`. Both directions cap at 20.9,
+  but when the darker color is darker than `#767676`, light-on-dark scores
+  lower than the swap, and the gap can flip an AA verdict — never reuse a
   ratio measured in the opposite order.
 - **Other algorithms via `--type`:** built-ins are `wcag2` and `deltaE`.
   Additional algorithms may be available as optional plugins — run

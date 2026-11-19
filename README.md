@@ -111,7 +111,7 @@ klar contrast <color1> <color2> [options]
 
 | Type | Range | Meaning |
 |------|-------|---------|
-| `okca` | 1 to 21 (20.9 reachable) | OKCA: OKLCH-native, WCAG-compatible ratio. 0 false passes vs WCAG, proven across the sRGB gamut. Polarity-aware — light-on-dark caps at 20.9, dark-on-light at 20. |
+| `okca` | 1 to 21 (20.9 reachable) | OKCA: OKLCH-native, WCAG-compatible ratio. 0 false passes vs WCAG, proven across the sRGB gamut. Polarity-aware — both directions cap at 20.9; light-on-dark scores lower when the darker color is darker than `#767676`. |
 | `wcag2` | 1 to 21 | Traditional WCAG 2.x luminance ratio |
 | `deltaE` | 0 to 100 | Delta E 2000 perceptual color difference |
 
@@ -137,7 +137,7 @@ the colors that were mapped, and the command **exits 1**:
 
 ```jsonc
 {
-  "contrast": 6,
+  "contrast": 6.5,
   "type": "okca",
   "colorOne": "oklch(0.79 0.22 25)",
   "colorTwo": "#070e16",
@@ -161,10 +161,10 @@ than passing silently.
 
 ```bash
 klar contrast "oklch(0.79 0.22 25)" "#070e16" -q
-# 6        exit 1 — measures #ff938b, the mapped equivalent
+# 6.5      exit 1 — measures #ff938b, the mapped equivalent
 
 klar contrast "oklch(0.79 0.22 25)" "#070e16" -q --allow-out-of-gamut
-# 6        exit 0 — same number, failure waived
+# 6.5      exit 0 — same number, failure waived
 
 klar contrast "oklch(0.79 0.22 25)" "#070e16" -q --type wcag2 --gamut-map none
 # 9.2      the colorimetric value of the color as authored
@@ -559,7 +559,7 @@ never the input echoed back. On `lightness-exhausted` the payload also carries
   "success": false,
   "reason": "lightness-exhausted",
   "adjustedColor": "#a9000b",              // closest reachable, still renderable
-  "actualContrast": 6,
+  "actualContrast": 6.1,
   "resolvableBy": {
     "chroma": 0.149,                       // the least saturation sacrifice that works
     "lightness": 0.365,                    // the lightness it needs

@@ -72,7 +72,7 @@ d('CLI exit-code contract', () => {
     });
   });
 
-  // A `--target` of 21 is above okca 2.0.0's light-on-dark cap (20.9), so it is
+  // A `--target` of 21 is above okca's cap (20.9), so it is
   // unreachable for any pair — a stable fixture for the unachievable branch.
   describe('1 = soft failure (negative result)', () => {
     it.each([
