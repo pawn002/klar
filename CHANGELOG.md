@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `@pawn002/klar-plugin-interface` and `@pawn002/klar-plugin-registry` are versioned
 independently from `klar-cli`; entries below note when they move.
 
+## [4.0.1] - 2026-11-18
+
+Documentation only. No CLI or API change; contrast scores are identical to 4.0.0.
+
+### Changed
+
+- **README no longer calls hot pink on near-black "illegible".** It now states
+  what okca's color-vision simulation measures: a protan reader keeps 5.3:1 of
+  the pair's WCAG 6.6:1, while the same-luminance grey keeps all of it. This
+  matches the updated [OKCA post](https://pawn002.github.io/blog-public/blog/okca-algorithm/).
+
 ## [4.0.0] - 2026-11-18
 
 ### Breaking
@@ -322,6 +333,7 @@ Initial release.
   `klar plugins list` now surfaces each plugin's source, version, and resolved path,
   and flags plugins loaded from outside the project.
 
+[4.0.1]: https://github.com/pawn002/klar/compare/v4.0.0...v4.0.1
 [4.0.0]: https://github.com/pawn002/klar/compare/v3.1.0...v4.0.0
 [3.1.0]: https://github.com/pawn002/klar/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/pawn002/klar/compare/v2.0.0...v3.0.0
