@@ -25,8 +25,9 @@ false passes and is now a cross-check on the proof rather than the basis for it.
 The problem OKCA solves:
 
 > Hot pink (`#ff69b4`) on near-black (`#1a1a1a`) scores **6.6:1** under WCAG and
-> passes AA. It's also illegible. A same-luminance neutral grey scores
-> identically — the WCAG formula is blind to saturation.
+> passes AA. A same-luminance neutral grey scores identically. Simulate
+> protanopia, though, and the pink keeps only 5.3:1 while the grey keeps all
+> 6.6 — the WCAG formula is blind to saturation.
 >
 > Full write-up: [Hot Pink Passes WCAG. That's the Problem.](https://pawn002.github.io/blog-public/blog/okca-algorithm/)
 
